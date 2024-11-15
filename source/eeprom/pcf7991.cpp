@@ -413,7 +413,7 @@ int processManchester()
     }
     // NRF_LOG_INFO("bytecount: %d", bytecount);
     NRF_LOG_INFO("bytecount: %d, bitcount: %d, errorCnt: %d, state: %d", bytecount, bitcount, errorCnt, state);
-    if (bytecount == 4){
+    if ((bytecount == 4) && (bitcount == 0) && (errorCnt == 0)){
         //NRF_LOG_INFO("bytecount: %d, bitcount: %d, errorCnt: %d, state: %d", bytecount, bitcount, errorCnt, state);
         // if(bytecount < 4) {
         //     doAllthing();
@@ -567,22 +567,28 @@ void ReadCommand::Execute(CommPacket_t *commResPacket,
                           const CommPacket_t *commReqPacket,
                           CommunicationType_t commType)
 {
-    std::vector<std::string> test = {"05C0", "204D494B52", "0aD900", "0aC980", "0aD140", "0aE0C0", "0aE880", "0aF040", "0aF800"};
-    for(int k = 0; k< test.size(); k++) {
+    std::vector<std::string> test_original = {"05C0", "204D494B52", "0aD900", "0aC980", "0aD140", "0aE0C0", "0aE880", "0aF040", "0aF800"};
+    std::vector<std::string> test = test_original;
+    for (int k = 0; k < test.size(); k++) {
         uint8_t cmdlength = serialToByte(test[k]);
-        //NRF_LOG_INFO("cmdlength: %d", cmdlength);
-        // //adapt();
         uint8_t authcmd[300] = {0};
-        if (cmdlength > 1 && cmdlength < 200)
-            for (int i = 0; i < (cmdlength + 7) / 8; i++)
-            {
+        NRF_LOG_INFO("cmdlength: %d", cmdlength);
+        if (cmdlength > 1 && cmdlength < 200) {
+            for (int i = 0; i < (cmdlength + 7) / 8; i++) {
                 authcmd[i] = serialToByte(test[k]);
-                //NRF_LOG_INFO("authcmd[%d]: %d", i, authcmd[i]);
             }
-        
+        }
+
         int result = communicateTag(authcmd, cmdlength);
-        while(result != 4) {
-            result = communicateTag(authcmd, cmdlength);
+
+        while (result != 4) {
+            if (k > 0) {
+                k = -1; // Reset to -1 so it becomes 0 at the start of the loop
+                test = test_original;
+                break;
+            } else {
+                result = communicateTag(authcmd, cmdlength);
+            }
             nrf_delay_ms(100);
         }
         nrf_delay_ms(100);

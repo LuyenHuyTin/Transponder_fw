@@ -108,10 +108,10 @@ int main(void) {
                  DEVICE_VERSION[0], DEVICE_VERSION[1], DEVICE_VERSION[2]);
     while (1)
     {
-        //doAllthing();
+        ReadAllthing();
         //nrf_delay_ms(10000);
-        WritePage();
-        nrf_delay_ms(1000);
+        //WritePage();
+        nrf_delay_ms(5000);
     }
     return 0;
 }
