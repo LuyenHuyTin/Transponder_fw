@@ -80,6 +80,7 @@ bool PcCommObj::ReceivePacketFromCommObj(void) {
 
         case RECEIVE_CMD:
             recvPacket.cmd = recvByte;
+            // NRF_LOG_INFO("[TIN ]recvPacket.cmd: %x", recvPacket.cmd);
             recvState = RECEIVE_DATALEN;
             break;
 
@@ -98,10 +99,13 @@ bool PcCommObj::ReceivePacketFromCommObj(void) {
                 }
                 recvByteCnt = 0;
             }
+            //NRF_LOG_INFO("[TIN] recvPacket.bufLend: %x", recvPacket.bufLen);
             break;
 
         case RECEIVE_DATA:
-            recvPacket.buffer[recvByteCnt++] = recvByte;
+            recvPacket.buffer[recvByteCnt] = recvByte;
+            //NRF_LOG_INFO("[TIN] recvByte: %x", recvPacket.buffer[recvByteCnt]);
+            recvByteCnt++;
             if (recvByteCnt == recvPacket.bufLen) {
                 recvState = RECEIVE_CRC;
                 recvByteCnt = 0;

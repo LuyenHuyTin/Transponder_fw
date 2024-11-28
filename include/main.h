@@ -35,9 +35,9 @@
 #define EEPROM_24CXX_BUF_SIZE   128
 #define EEPROM_93CXX_BUF_SIZE   128
 #define RL78_BUF_SIZE           128
-#define dout_pin                42
-#define SCK_pin                 11
-#define din_pin                 25
+#define dout_pin                11 //42
+#define SCK_pin                 25 //11
+#define din_pin                 42 //25
 
 #define PC_UART_COMM_IDX        1
 #define PC_UART_COMM_TX_PIN     47

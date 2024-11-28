@@ -85,6 +85,7 @@ static bool isPic18fxxRequestCmd(EEPROMType_t type) {
 }
 
 void EEPROM::GetCmdFromEEPROMRequest(EsyPro::CommunicationObj *commPtr) {
+    //NRF_LOG_INFO("recevice eeprom");
     Command *cmd = NULL;
     CommPacket_t reqPacket;
     static EEPROMType_t eepromType;

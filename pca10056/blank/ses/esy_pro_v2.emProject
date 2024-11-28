@@ -209,7 +209,6 @@
         <file file_name="../../../source/eeprom/at24cxx.cpp" />
         <file file_name="../../../source/eeprom/at93cxx.cpp" />
         <file file_name="../../../source/eeprom/eeprom_common.cpp" />
-        <file file_name="../../../source/eeprom/pcf7991.cpp" />
         <file file_name="../../../source/eeprom/pic16fxx.cpp" />
         <file file_name="../../../source/eeprom/pic18fxx.cpp" />
         <file file_name="../../../source/eeprom/rl78.cpp" />
@@ -224,6 +223,10 @@
       </folder>
       <folder Name="scutool">
         <file file_name="../../../source/scutool/scutool.cpp" />
+      </folder>
+      <folder Name="transponder">
+        <file file_name="../../../source/transponder/pcf7991.cpp" />
+        <file file_name="../../../source/transponder/transponder_common.cpp" />
       </folder>
       <file file_name="../../../source/ble_common.cpp" />
       <file file_name="../../../source/common.cpp" />

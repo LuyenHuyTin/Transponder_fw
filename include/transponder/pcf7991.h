@@ -2,10 +2,16 @@
 #define __PCF7991_H
 
 #include "main.h"
-#include "eeprom/eeprom_common.h"
+#include "transponder/transponder_common.h"
+#include <string>
+#include <vector>
+#include <iostream>
 
 // Public methods
-namespace Transponder
+#define VALID_READ_RESPONSE_SIZE_TRANS  36
+#define VALID_WRITE_RESPONSE_SIZE_TRANS  10
+
+namespace PCF7991
 {
     static union
     {
@@ -51,9 +57,6 @@ namespace Transponder
     private:
         static Pcf7991 *instance;
     public:
-
-        EsyPro::Command *GetSpecificCmd(EsyPro::CommunicationCmd_t commCmdType);
-
         static Pcf7991* getInstance() {
             if(nullptr == instance) {
                 instance = new Pcf7991();
@@ -61,6 +64,7 @@ namespace Transponder
             return instance;
         }
     };
+    EsyPro::Command *GetSpecificCmd(EsyPro::CommunicationCmd_t commCmdType);
 
     class SetupCommand : public EsyPro::Command {
     public:
@@ -71,6 +75,8 @@ namespace Transponder
 
     class ReadCommand : public EsyPro::Command {
     public:
+        std::vector<std::string> req_read_set = {"05C0", "204D494B52", "0aD900", "0aC980",
+                                                "0aD140", "0aE0C0", "0aE880", "0aF040", "0aF800"};
         void Execute(EsyPro::CommPacket_t *commResPacket,
                      const EsyPro::CommPacket_t *commReqPacket,
                      EsyPro::CommunicationType_t commType) override;
@@ -78,12 +84,14 @@ namespace Transponder
 
     class WriteCommand : public EsyPro::Command {
     public:
+        std::vector<std::string> req_write_set = {"05C0", "204D494B52", "0aA2C0"};
         void Execute(EsyPro::CommPacket_t *commResPacket,
                      const EsyPro::CommPacket_t *commReqPacket,
                      EsyPro::CommunicationType_t commType) override;
     };
     void ReadAllthing();
     void WritePage();
+    void Setup();
 }
 
 #endif /* __PCF7991_H */

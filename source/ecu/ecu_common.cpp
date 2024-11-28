@@ -42,13 +42,13 @@ void ECU::GetCmdFromEcuRequest(CommunicationObj *commPtr,
 
         } else if (ecuType == ECU_YAMAHA_SMK) {
             cmd = YamahaSMK::GetSpecificCmd((CommunicationCmd_t)reqPacket.cmd);
-        
+
         } else if (ecuType == ECU_YAMAHA_OBD2) {
             cmd = YamahaObd2::GetSpecificCmd((CommunicationCmd_t)reqPacket.cmd);
 
         }
         break;
-        
+
     case CMD_ECU_HONDA_BACKUP_BASE:
         cmd = HondaKeihinBackup::GetSpecificCmd((CommunicationCmd_t)reqPacket.cmd);
         break;

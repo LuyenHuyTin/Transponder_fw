@@ -1,56 +1,52 @@
 #include "ble_common.h"
-#include "eeprom/pcf7991.h"
-#include <string>
-#include <vector>
+#include "transponder/pcf7991.h"
 
-using namespace Transponder;
+using namespace PCF7991;
 using namespace EsyPro;
-using namespace EEPROM;
+// using namespace EEPROM;
 
 // Note: din_pin must have external interrupt feature!
 static const char LOG_DGB_NAME[] = "pcf7991";
-static Transponder::SetupCommand pcf7991SetupCmd;
-static Transponder::ReadCommand pcf7991ReadCmd;
+static PCF7991::SetupCommand pcf7991SetupCmd;
+static PCF7991::ReadCommand pcf7991ReadCmd;
+static PCF7991::WriteCommand pcf7991WriteCmd;
 
-Transponder::Pcf7991 *Pcf7991::instance = nullptr;
+PCF7991::Pcf7991 *Pcf7991::instance = nullptr;
 const nrf_drv_timer_t TIMER_TEST = NRF_DRV_TIMER_INSTANCE(4);
 uint32_t isrtimes[400];
 uint32_t *isrtimes_ptr = isrtimes;
-volatile int32_t bitsCnt = 0;
 volatile int32_t isrCnt = 0;
-volatile int32_t capturedone = 0;
-unsigned long starttime = 0;
 int32_t rfoffset = 2;
-unsigned char AbicPhaseMeas;
 int32_t debug = 0;
 int32_t decodemode = 0;
 int32_t delay_1 = 20;
 int32_t delay_0 = 14;
-int32_t delay_p = 5;
 int32_t hysteresis = 1;
 bool gpiote_initialized = false;
 bool timer_initialized = false;
+std::vector<int> byte_to_send;
 
 /*ABIC Settings */
 
-Command *Pcf7991::GetSpecificCmd(EsyPro::CommunicationCmd_t commCmdType)
+Command *PCF7991::GetSpecificCmd(EsyPro::CommunicationCmd_t commCmdType)
 {
     Command *cmd = NULL;
 
+    NRF_LOG_INFO("-----reqPacket.cmd: %x", commCmdType & 0x0F);
     switch (commCmdType & 0x0F)
     {
-    case CMD_BASIC_MEM_SETUP_REQ:
+    case CMD_BASIC_TRANS_SETUP_REQ:
         cmd = &pcf7991SetupCmd;
         NRF_LOG_INFO("[%s]: INFO: Setup Request", LOG_DGB_NAME);
         break;
 
-    case CMD_BASIC_MEM_READ_DATA_REQ:
+    case CMD_BASIC_TRANS_READ_DATA_REQ:
         cmd = &pcf7991ReadCmd;
         NRF_LOG_INFO("[%s]: INFO: Read Request", LOG_DGB_NAME);
         break;
 
-    case CMD_BASIC_MEM_WRITE_DATA_REQ:
-        // cmd = &at93cxxWriteCmd;
+    case CMD_BASIC_TRANS_WRITE_DATA_REQ:
+        cmd = &pcf7991WriteCmd;
         NRF_LOG_INFO("[%s]: INFO: Write Request", LOG_DGB_NAME);
         break;
     }
@@ -180,6 +176,9 @@ void initTransponder()
         readval = readPCF7991Reg(i);
     }
     writePCF7991Reg(0x70, 8);
+
+    int checkAntena = readPCF7991Reg(0x7);
+    NRF_LOG_INFO("checkAntena: %d", checkAntena);
 }
 
 void writeToTag(uint8_t *data, int bits)
@@ -261,12 +260,13 @@ void timer_event_handler(nrf_timer_event_t event_type, void *p_context)
 }
 void initTimer()
 {
-    if(!timer_initialized) {
+    if (!timer_initialized)
+    {
         uint32_t err_code;
         nrf_drv_timer_config_t timer_cfg = NRF_DRV_TIMER_DEFAULT_CONFIG;
 
         timer_cfg.mode = NRF_TIMER_MODE_TIMER; // Use TIMER mode for timing intervals
-        timer_cfg.bit_width = NRF_TIMER_BIT_WIDTH_16;
+        timer_cfg.bit_width = NRF_TIMER_BIT_WIDTH_32;
         timer_cfg.frequency = NRF_TIMER_FREQ_250kHz;
 
         err_code = nrf_drv_timer_init(&TIMER_TEST, &timer_cfg, timer_event_handler); // Assuming no handler needed
@@ -313,7 +313,7 @@ int processManchester()
         // int pulsetime_thresh = pulsetime_fil + (pulsetime_fil/2);
         int pulsetime_thresh = 55;
         int travelTime = isrtimes_ptr[i];
-        //NRF_LOG_INFO("%d", travelTime);
+        // NRF_LOG_INFO("%d", travelTime);
         if (((travelTime & 1) == 1)) // high
         {
             if (travelTime > pulsetime_thresh)
@@ -413,11 +413,12 @@ int processManchester()
     }
     // NRF_LOG_INFO("bytecount: %d", bytecount);
     NRF_LOG_INFO("bytecount: %d, bitcount: %d, errorCnt: %d, state: %d", bytecount, bitcount, errorCnt, state);
-    if ((bytecount == 4) && (bitcount == 0) && (errorCnt == 0)){
-        //NRF_LOG_INFO("bytecount: %d, bitcount: %d, errorCnt: %d, state: %d", bytecount, bitcount, errorCnt, state);
-        // if(bytecount < 4) {
-        //     doAllthing();
-        // }
+    if ((bytecount == 4) && (bitcount == 0) && (errorCnt == 0))
+    {
+        // NRF_LOG_INFO("bytecount: %d, bitcount: %d, errorCnt: %d, state: %d", bytecount, bitcount, errorCnt, state);
+        //  if(bytecount < 4) {
+        //      doAllthing();
+        //  }
         char hash[20];
         std::string result = "";
         NRF_LOG_INFO("RESP:");
@@ -429,14 +430,25 @@ int processManchester()
         {
             for (int s = 0; s < bytecount && s < 20; s++)
             {
+                byte_to_send.push_back(mybytes[s]);
                 NRF_LOG_INFO("0x%x", mybytes[s]);
             }
         }
         NRF_LOG_INFO("\n");
+        return bytecount;
     }
-    int res = bytecount + bitcount;
-    //NRF_LOG_INFO("bytecount: %d", res);
-    return res;
+    else
+    {
+        if((bytecount == 2) && (errorCnt == 0)) {
+            for (int s = 0; s < bytecount && s < 20; s++)
+            {
+                byte_to_send.push_back(mybytes[s]);
+                NRF_LOG_INFO("0x%x", mybytes[s]);
+            }
+        }
+    }
+    // NRF_LOG_INFO("bytecount: %d", res);
+    return 0;
 }
 
 void gpio_init_interrupt(void)
@@ -468,8 +480,8 @@ void readTagResp(void)
 
     gpio_init_interrupt();
 
-    for (volatile int i = 0; i < 220; i++)
-        for (volatile int k = 0; k < 350; k++)
+    for (volatile int i = 0; i < 300; i++)
+        for (volatile int k = 0; k < 300; k++)
             ;
 
     if (isrCnt < 400 && isrCnt > 3)
@@ -478,8 +490,8 @@ void readTagResp(void)
         isrCnt++;
     }
 
-    //nrf_drv_gpiote_in_event_disable(din_pin);
-    // gpiote_initialized = false;
+    // nrf_drv_gpiote_in_event_disable(din_pin);
+    //  gpiote_initialized = false;
 }
 
 int communicateTag(uint8_t *tagcmd, unsigned int cmdLengt)
@@ -519,6 +531,11 @@ void tester()
     NRF_LOG_INFO("ISRcnt: %x", isrCnt);
 }
 
+std::string convertToString(char *a, int size)
+{
+    return std::string(a, size);
+}
+
 uint8_t serialToByte(std::string &value)
 {
     if (value.length() < 2)
@@ -550,6 +567,17 @@ uint8_t serialToByte(std::string &value)
     value.erase(0, 2);
     return retval; // Return the resulting integer
 }
+
+std::string hexToString(const uint8_t *data, size_t length)
+{
+    std::string result;
+    for (size_t i = 0; i < length; i++)
+    {
+        result += static_cast<char>(data[i]);
+    }
+    return result;
+}
+
 void SetupCommand::Execute(CommPacket_t *commResPacket,
                            const CommPacket_t *commReqPacket,
                            CommunicationType_t commType)
@@ -567,94 +595,70 @@ void ReadCommand::Execute(CommPacket_t *commResPacket,
                           const CommPacket_t *commReqPacket,
                           CommunicationType_t commType)
 {
-    std::vector<std::string> test_original = {"05C0", "204D494B52", "0aD900", "0aC980", "0aD140", "0aE0C0", "0aE880", "0aF040", "0aF800"};
-    std::vector<std::string> test = test_original;
-    for (int k = 0; k < test.size(); k++) {
+    byte_to_send.clear();
+    std::vector<std::string> test = req_read_set;
+    for (int k = 0; k < test.size(); k++)
+    {
         uint8_t cmdlength = serialToByte(test[k]);
         uint8_t authcmd[300] = {0};
-        NRF_LOG_INFO("cmdlength: %d", cmdlength);
-        if (cmdlength > 1 && cmdlength < 200) {
-            for (int i = 0; i < (cmdlength + 7) / 8; i++) {
+        if (cmdlength > 1 && cmdlength < 200)
+        {
+            for (int i = 0; i < (cmdlength + 7) / 8; i++)
+            {
                 authcmd[i] = serialToByte(test[k]);
             }
         }
 
         int result = communicateTag(authcmd, cmdlength);
-
-        while (result != 4) {
-            if (k > 0) {
-                k = -1; // Reset to -1 so it becomes 0 at the start of the loop
-                test = test_original;
-                break;
-            } else {
-                result = communicateTag(authcmd, cmdlength);
-            }
-            nrf_delay_ms(100);
-        }
-        nrf_delay_ms(100);
+        nrf_delay_ms(20);
     }
-    commResPacket->cmd = CMD_BASIC_MEM_READ_DATA_RES;
-    commResPacket->bleUUID = CUSTOM_VALUE_READ_CHAR_UUID;
-    commResPacket->bufLen = EEPROM_24CXX_BUF_SIZE;
+    // NRF_LOG_INFO("byte_to_send.size(): %d", byte_to_send.size());
+    // NRF_LOG_INFO("VALID_RESPONSE_SIZE_TRANS: %d", VALID_RESPONSE_SIZE_TRANS);
+    if (byte_to_send.size() == VALID_READ_RESPONSE_SIZE_TRANS)
+    {
+        for (int i = 0; i < byte_to_send.size(); i++)
+        {
+            commResPacket->buffer[i] = byte_to_send[i];
+        }
+        commResPacket->cmd = CMD_BASIC_TRANS_READ_DATA_RES;
+        commResPacket->bleUUID = CUSTOM_VALUE_READ_CHAR_UUID;
+        commResPacket->bufLen = VALID_READ_RESPONSE_SIZE_TRANS;
+    }
     this->SetCommandRepeatState(false);
 }
 
 void WriteCommand::Execute(CommPacket_t *commResPacket,
-                          const CommPacket_t *commReqPacket,
-                          CommunicationType_t commType)
+                           const CommPacket_t *commReqPacket,
+                           CommunicationType_t commType)
 {
-    std::vector<std::string> test = {"05C0", "204D494B52", "0aAA80", "2055555550"};
-    for(int k = 0; k< test.size(); k++) {
+    byte_to_send.clear();
+    uint8_t receiver[commReqPacket->bufLen]; // Create an array to hold 4 bytes
+    // NRF_LOG_INFO("length: %d", commReqPacket->bufLen);
+    memcpy(receiver, commReqPacket->buffer, commReqPacket->bufLen);
+    std::string data_to_write = hexToString(receiver, sizeof(receiver));
+    std::vector<std::string> test = req_write_set;
+    test.push_back(data_to_write);
+    for (int k = 0; k < test.size(); k++)
+    {
         uint8_t cmdlength = serialToByte(test[k]);
-        //NRF_LOG_INFO("cmdlength: %d", cmdlength);
-        // //adapt();
         uint8_t authcmd[300] = {0};
         if (cmdlength > 1 && cmdlength < 200)
+        {
             for (int i = 0; i < (cmdlength + 7) / 8; i++)
             {
                 authcmd[i] = serialToByte(test[k]);
-                //NRF_LOG_INFO("authcmd[%d]: %d", i, authcmd[i]);
             }
-        NRF_LOG_INFO("Sending: %d", k);
-        int result = communicateTag(authcmd, cmdlength);
-        while(result != 4) {
-            result = communicateTag(authcmd, cmdlength);
-            nrf_delay_ms(100);
         }
-        nrf_delay_ms(100);
+
+        int result = communicateTag(authcmd, cmdlength);
+        nrf_delay_ms(20);
     }
-    commResPacket->cmd = CMD_BASIC_MEM_READ_DATA_RES;
-    commResPacket->bleUUID = CUSTOM_VALUE_READ_CHAR_UUID;
-    commResPacket->bufLen = EEPROM_24CXX_BUF_SIZE;
+    //NRF_LOG_INFO("byte_to_send.size(): %d", byte_to_send.size());
+    if(byte_to_send.size() == VALID_WRITE_RESPONSE_SIZE_TRANS) {
+        commResPacket->buffer[0] = 1;
+        commResPacket->cmd = CMD_BASIC_TRANS_WRITE_DATA_RES;
+        commResPacket->bleUUID = CUSTOM_VALUE_READ_CHAR_UUID;
+        commResPacket->bufLen = 1;
+    }
     this->SetCommandRepeatState(false);
-}
-
-void Transponder::ReadAllthing(void)
-{
-    Transponder::SetupCommand setupCommand;
-    Transponder::ReadCommand readCommand;
-
-    // Create instances of CommPacket_t (ensure you have proper constructors or initializations)
-    CommPacket_t commResPacket;
-    CommPacket_t commReqPacket;
-
-    setupCommand.Execute(&commResPacket, &commReqPacket, PC_COMM_TYPE);
-    readCommand.Execute(&commResPacket, &commReqPacket, PC_COMM_TYPE);
-
-    NRF_LOG_INFO("EOF-----------------------------------------------\n");
-}
-
-void Transponder::WritePage(void)
-{
-    Transponder::SetupCommand setupCommand;
-    Transponder::WriteCommand writecommand;
-
-    // Create instances of CommPacket_t (ensure you have proper constructors or initializations)
-    CommPacket_t commResPacket;
-    CommPacket_t commReqPacket;
-
-    setupCommand.Execute(&commResPacket, &commReqPacket, PC_COMM_TYPE);
-    writecommand.Execute(&commResPacket, &commReqPacket, PC_COMM_TYPE);
-
-    NRF_LOG_INFO("EOF-----------------------------------------------\n");
 }

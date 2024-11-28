@@ -3,6 +3,7 @@
 #include "ecu/ecu_common.h"
 #include "eeprom/eeprom_common.h"
 #include "scutool/scutool.h"
+#include "transponder/transponder_common.h"
 
 using namespace EsyPro;
 static CommunicationType_t connectedComm[2] = {NOT_CONNECTED, NOT_CONNECTED};
@@ -136,6 +137,7 @@ void CommunicationModule::RunCommunicationModuleTask(void) {
         ECU::GetCmdFromEcuRequest(commObjPtr, commType);
         EEPROM::GetCmdFromEEPROMRequest(commObjPtr);
         SCUTool::GetCmdFromScutoolRequest(commObjPtr);
+        TRANSPONDER::GetCmdFromTransponderRequest(commObjPtr);
 
         commObjPtr->ExecuteCommand(commType);
     }
