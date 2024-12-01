@@ -23,49 +23,49 @@ static volatile bool keep_running = true;
 static Mcs9S12Option_t option;
 
 //////////////////////////
-#include "nrf.h"
-#include "app_error.h"
-#include "nrf_gpio.h"
-#include "nrf_sdh.h"
+// #include "nrf.h"
+// #include "app_error.h"
+// #include "nrf_gpio.h"
+// #include "nrf_sdh.h"
 
-/**Constants for timeslot API
-*/
-static nrf_radio_request_t  m_timeslot_request;
-static uint32_t             m_slot_length;
+// /**Constants for timeslot API
+// */
+// static nrf_radio_request_t  m_timeslot_request;
+// static uint32_t             m_slot_length;
 
-/**@brief Radio event handler
-*/
-void RADIO_timeslot_IRQHandler(void);
-
-
-/**@brief Request next timeslot event in earliest configuration
- */
-uint32_t request_next_event_earliest(void);
+// /**@brief Radio event handler
+// */
+// void RADIO_timeslot_IRQHandler(void);
 
 
-/**@brief Configure next timeslot event in earliest configuration
- */
-void configure_next_event_earliest(void);
+// /**@brief Request next timeslot event in earliest configuration
+//  */
+// uint32_t request_next_event_earliest(void);
 
 
-/**@brief Configure next timeslot event in normal configuration
- */
-void configure_next_event_normal(void);
+// /**@brief Configure next timeslot event in earliest configuration
+//  */
+// void configure_next_event_earliest(void);
 
 
-/**@brief Timeslot signal handler
- */
-void nrf_evt_signal_handler(uint32_t evt_id);
+// /**@brief Configure next timeslot event in normal configuration
+//  */
+// void configure_next_event_normal(void);
 
 
-/**@brief Timeslot event handler
- */
-nrf_radio_signal_callback_return_param_t * radio_callback(uint8_t signal_type);
+// /**@brief Timeslot signal handler
+//  */
+// void nrf_evt_signal_handler(uint32_t evt_id);
 
 
-/**@brief Function for initializing the timeslot API.
- */
-uint32_t timeslot_sd_init(void);
+// /**@brief Timeslot event handler
+//  */
+// nrf_radio_signal_callback_return_param_t * radio_callback(uint8_t signal_type);
+
+
+// /**@brief Function for initializing the timeslot API.
+//  */
+// uint32_t timeslot_sd_init(void);
 
 //////////////////////////
 
@@ -257,10 +257,10 @@ static void _9s12WriteCmd(uint8_t command[]) {
 }
 
 
-static void time_slot_soc_evt_handler(uint32_t evt_id, void * p_context)
-{
-    nrf_evt_signal_handler(evt_id);
-}
+// static void time_slot_soc_evt_handler(uint32_t evt_id, void * p_context)
+// {
+//     nrf_evt_signal_handler(evt_id);
+// }
 
 static bool eeprom_9s12_sync(void)
 {
@@ -993,8 +993,8 @@ void SetupCommand::Execute(CommPacket_t *commResPacket,
     else //setup message
     {
         //initialize the timeslot
-        NRF_SDH_SOC_OBSERVER(m_time_slot_soc_observer, 0, time_slot_soc_evt_handler, NULL);
-        timeslot_sd_init();
+        //NRF_SDH_SOC_OBSERVER(m_time_slot_soc_observer, 0, time_slot_soc_evt_handler, NULL);
+        //timeslot_sd_init();
 
         NRF_LOG_INFO("9s12 setup request");
         // eeprom_9s12_power_on();
@@ -1137,175 +1137,175 @@ void WriteCommand::Execute(CommPacket_t *commResPacket,
 /////////////////////////////////
 
 
-static nrf_radio_signal_callback_return_param_t signal_callback_return_param;
+// static nrf_radio_signal_callback_return_param_t signal_callback_return_param;
 
-/**@brief Request next timeslot event in earliest configuration
- */
-uint32_t request_next_event_earliest(void)
-{
-    m_slot_length                                  = 10000;
-    m_timeslot_request.request_type                = NRF_RADIO_REQ_TYPE_EARLIEST;
-    m_timeslot_request.params.earliest.hfclk       = NRF_RADIO_HFCLK_CFG_XTAL_GUARANTEED;
-    m_timeslot_request.params.earliest.priority    = NRF_RADIO_PRIORITY_NORMAL;
-    m_timeslot_request.params.earliest.length_us   = m_slot_length;
-    m_timeslot_request.params.earliest.timeout_us  = 1000000;
-    return sd_radio_request(&m_timeslot_request);
-}
-
-
-/**@brief Configure next timeslot event in earliest configuration
- */
-void configure_next_event_earliest(void)
-{
-    m_slot_length                                  = 10000;
-    m_timeslot_request.request_type                = NRF_RADIO_REQ_TYPE_EARLIEST;
-    m_timeslot_request.params.earliest.hfclk       = NRF_RADIO_HFCLK_CFG_XTAL_GUARANTEED;
-    m_timeslot_request.params.earliest.priority    = NRF_RADIO_PRIORITY_NORMAL;
-    m_timeslot_request.params.earliest.length_us   = m_slot_length;
-    m_timeslot_request.params.earliest.timeout_us  = 1000000;
-}
+// /**@brief Request next timeslot event in earliest configuration
+//  */
+// uint32_t request_next_event_earliest(void)
+// {
+//     m_slot_length                                  = 10000;
+//     m_timeslot_request.request_type                = NRF_RADIO_REQ_TYPE_EARLIEST;
+//     m_timeslot_request.params.earliest.hfclk       = NRF_RADIO_HFCLK_CFG_XTAL_GUARANTEED;
+//     m_timeslot_request.params.earliest.priority    = NRF_RADIO_PRIORITY_NORMAL;
+//     m_timeslot_request.params.earliest.length_us   = m_slot_length;
+//     m_timeslot_request.params.earliest.timeout_us  = 1000000;
+//     return sd_radio_request(&m_timeslot_request);
+// }
 
 
-/**@brief Configure next timeslot event in normal configuration
- */
-void configure_next_event_normal(void)
-{
-    m_slot_length                                 = 10000;
-    m_timeslot_request.request_type               = NRF_RADIO_REQ_TYPE_NORMAL;
-    m_timeslot_request.params.normal.hfclk        = NRF_RADIO_HFCLK_CFG_XTAL_GUARANTEED;
-    m_timeslot_request.params.normal.priority     = NRF_RADIO_PRIORITY_HIGH;
-    m_timeslot_request.params.normal.distance_us  = 100000;
-    m_timeslot_request.params.normal.length_us    = m_slot_length;
-}
+// /**@brief Configure next timeslot event in earliest configuration
+//  */
+// void configure_next_event_earliest(void)
+// {
+//     m_slot_length                                  = 10000;
+//     m_timeslot_request.request_type                = NRF_RADIO_REQ_TYPE_EARLIEST;
+//     m_timeslot_request.params.earliest.hfclk       = NRF_RADIO_HFCLK_CFG_XTAL_GUARANTEED;
+//     m_timeslot_request.params.earliest.priority    = NRF_RADIO_PRIORITY_NORMAL;
+//     m_timeslot_request.params.earliest.length_us   = m_slot_length;
+//     m_timeslot_request.params.earliest.timeout_us  = 1000000;
+// }
 
 
-/**@brief Timeslot signal handler
- */
-void nrf_evt_signal_handler(uint32_t evt_id)
-{
-    uint32_t err_code;
-
-    switch (evt_id)
-    {
-        case NRF_EVT_RADIO_SIGNAL_CALLBACK_INVALID_RETURN:
-            //No implementation needed
-            break;
-        case NRF_EVT_RADIO_SESSION_IDLE:
-            working_enable = false;
-            if (keep_running)
-            {
-                err_code = request_next_event_earliest();
-                APP_ERROR_CHECK(err_code);
-            }
-            //No implementation needed
-            break;
-        case NRF_EVT_RADIO_SESSION_CLOSED:
-            //No implementation needed, session ended
-            working_enable = false;
-            break;
-        case NRF_EVT_RADIO_BLOCKED:
-            //Fall through
-        case NRF_EVT_RADIO_CANCELED:
-            if (keep_running)
-            {
-                err_code = request_next_event_earliest();
-                APP_ERROR_CHECK(err_code);
-            }
-            break;
-        default:
-            break;
-    }
-}
+// /**@brief Configure next timeslot event in normal configuration
+//  */
+// void configure_next_event_normal(void)
+// {
+//     m_slot_length                                 = 10000;
+//     m_timeslot_request.request_type               = NRF_RADIO_REQ_TYPE_NORMAL;
+//     m_timeslot_request.params.normal.hfclk        = NRF_RADIO_HFCLK_CFG_XTAL_GUARANTEED;
+//     m_timeslot_request.params.normal.priority     = NRF_RADIO_PRIORITY_HIGH;
+//     m_timeslot_request.params.normal.distance_us  = 100000;
+//     m_timeslot_request.params.normal.length_us    = m_slot_length;
+// }
 
 
-/**@brief Timeslot event handler
- */
-nrf_radio_signal_callback_return_param_t * radio_callback(uint8_t signal_type)
-{
-    switch(signal_type)
-    {
-        case NRF_RADIO_CALLBACK_SIGNAL_TYPE_START:
-            //Start of the timeslot - set up timer interrupt
-            signal_callback_return_param.params.request.p_next = NULL;
-            signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_NONE;
-            NRF_TIMER0->INTENSET = TIMER_INTENSET_COMPARE0_Msk;
-            NRF_TIMER0->CC[0] = m_slot_length - 1000;
-            NVIC_EnableIRQ(TIMER0_IRQn);
-            //nrf_gpio_pin_set(13); //Toggle LED
-            working_enable = true;
-            break;
+// /**@brief Timeslot signal handler
+//  */
+// void nrf_evt_signal_handler(uint32_t evt_id)
+// {
+//     uint32_t err_code;
 
-        case NRF_RADIO_CALLBACK_SIGNAL_TYPE_RADIO:
-            signal_callback_return_param.params.request.p_next = NULL;
-            signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_NONE;
-            break;
-
-        case NRF_RADIO_CALLBACK_SIGNAL_TYPE_TIMER0:
-            working_enable = false;
-            //nrf_gpio_pin_clear(13);
-            signal_callback_return_param.params.extend.length_us = m_slot_length;
-            if(keep_running)
-            {
-              //Timer interrupt - do graceful shutdown - schedule next timeslot
-              configure_next_event_normal();
-              signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_EXTEND;
-            }
-            else
-            {
-              signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_REQUEST_AND_END;
-            }
-            break;
-        case NRF_RADIO_CALLBACK_SIGNAL_TYPE_EXTEND_SUCCEEDED:
-            //No implementation needed
-            //nrf_gpio_pin_set(13);
-            //working_enable = true;
-            break;
-        case NRF_RADIO_CALLBACK_SIGNAL_TYPE_EXTEND_FAILED:
-            //Try scheduling a new timeslot
-            //nrf_gpio_pin_clear(13);
-            working_enable = false;
-            configure_next_event_earliest();
-            signal_callback_return_param.params.request.p_next = &m_timeslot_request;
-            signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_REQUEST_AND_END;
-            break;
-        default:
-            //No implementation needed
-            break;
-    }
-    return (&signal_callback_return_param);
-}
+//     switch (evt_id)
+//     {
+//         case NRF_EVT_RADIO_SIGNAL_CALLBACK_INVALID_RETURN:
+//             //No implementation needed
+//             break;
+//         case NRF_EVT_RADIO_SESSION_IDLE:
+//             working_enable = false;
+//             if (keep_running)
+//             {
+//                 err_code = request_next_event_earliest();
+//                 APP_ERROR_CHECK(err_code);
+//             }
+//             //No implementation needed
+//             break;
+//         case NRF_EVT_RADIO_SESSION_CLOSED:
+//             //No implementation needed, session ended
+//             working_enable = false;
+//             break;
+//         case NRF_EVT_RADIO_BLOCKED:
+//             //Fall through
+//         case NRF_EVT_RADIO_CANCELED:
+//             if (keep_running)
+//             {
+//                 err_code = request_next_event_earliest();
+//                 APP_ERROR_CHECK(err_code);
+//             }
+//             break;
+//         default:
+//             break;
+//     }
+// }
 
 
-/**@brief Function for initializing the timeslot API.
- */
-uint32_t timeslot_sd_init(void)
-{
-    uint32_t err_code;
+// /**@brief Timeslot event handler
+//  */
+// nrf_radio_signal_callback_return_param_t * radio_callback(uint8_t signal_type)
+// {
+//     switch(signal_type)
+//     {
+//         case NRF_RADIO_CALLBACK_SIGNAL_TYPE_START:
+//             //Start of the timeslot - set up timer interrupt
+//             signal_callback_return_param.params.request.p_next = NULL;
+//             signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_NONE;
+//             NRF_TIMER0->INTENSET = TIMER_INTENSET_COMPARE0_Msk;
+//             NRF_TIMER0->CC[0] = m_slot_length - 1000;
+//             NVIC_EnableIRQ(TIMER0_IRQn);
+//             //nrf_gpio_pin_set(13); //Toggle LED
+//             working_enable = true;
+//             break;
 
-    keep_running = true;
-    working_enable = false;
+//         case NRF_RADIO_CALLBACK_SIGNAL_TYPE_RADIO:
+//             signal_callback_return_param.params.request.p_next = NULL;
+//             signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_NONE;
+//             break;
 
-    nrf_delay_ms(100);
+//         case NRF_RADIO_CALLBACK_SIGNAL_TYPE_TIMER0:
+//             working_enable = false;
+//             //nrf_gpio_pin_clear(13);
+//             signal_callback_return_param.params.extend.length_us = m_slot_length;
+//             if(keep_running)
+//             {
+//               //Timer interrupt - do graceful shutdown - schedule next timeslot
+//               configure_next_event_normal();
+//               signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_EXTEND;
+//             }
+//             else
+//             {
+//               signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_REQUEST_AND_END;
+//             }
+//             break;
+//         case NRF_RADIO_CALLBACK_SIGNAL_TYPE_EXTEND_SUCCEEDED:
+//             //No implementation needed
+//             //nrf_gpio_pin_set(13);
+//             //working_enable = true;
+//             break;
+//         case NRF_RADIO_CALLBACK_SIGNAL_TYPE_EXTEND_FAILED:
+//             //Try scheduling a new timeslot
+//             //nrf_gpio_pin_clear(13);
+//             working_enable = false;
+//             configure_next_event_earliest();
+//             signal_callback_return_param.params.request.p_next = &m_timeslot_request;
+//             signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_REQUEST_AND_END;
+//             break;
+//         default:
+//             //No implementation needed
+//             break;
+//     }
+//     return (&signal_callback_return_param);
+// }
 
-    err_code = sd_radio_session_open(radio_callback);
-    if (err_code != NRF_SUCCESS)
-    {
-        NRF_LOG_INFO("sd_radio_session_open FAIL")
-        return err_code;
-    }
 
-    err_code = request_next_event_earliest();
-    if (err_code != NRF_SUCCESS)
-    {
-        (void)sd_radio_session_close();
-        NRF_LOG_INFO("sd_radio_session_close FAIL")
-        return err_code;
-    }
-    NRF_LOG_INFO("timeslot_sd_init done")
+// /**@brief Function for initializing the timeslot API.
+//  */
+// uint32_t timeslot_sd_init(void)
+// {
+//     uint32_t err_code;
 
-    //some delay
-    nrf_delay_us(m_slot_length);
-    return NRF_SUCCESS;
-}
-/////////////////////////////////
+//     keep_running = true;
+//     working_enable = false;
+
+//     nrf_delay_ms(100);
+
+//     err_code = sd_radio_session_open(radio_callback);
+//     if (err_code != NRF_SUCCESS)
+//     {
+//         NRF_LOG_INFO("sd_radio_session_open FAIL")
+//         return err_code;
+//     }
+
+//     err_code = request_next_event_earliest();
+//     if (err_code != NRF_SUCCESS)
+//     {
+//         (void)sd_radio_session_close();
+//         NRF_LOG_INFO("sd_radio_session_close FAIL")
+//         return err_code;
+//     }
+//     NRF_LOG_INFO("timeslot_sd_init done")
+
+//     //some delay
+//     nrf_delay_us(m_slot_length);
+//     return NRF_SUCCESS;
+// }
+// /////////////////////////////////
 

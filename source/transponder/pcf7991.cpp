@@ -1,5 +1,7 @@
 #include "ble_common.h"
 #include "transponder/pcf7991.h"
+#include "eeprom/9s12.h"
+#include "nrf_sdh_soc.h"
 
 using namespace PCF7991;
 using namespace EsyPro;
@@ -25,8 +27,63 @@ int32_t hysteresis = 1;
 bool gpiote_initialized = false;
 bool timer_initialized = false;
 std::vector<int> byte_to_send;
+static volatile bool working_enable = false;
+static volatile bool keep_running = true;
 
 /*ABIC Settings */
+//////////////////////////
+#include "nrf.h"
+#include "app_error.h"
+#include "nrf_gpio.h"
+#include "nrf_sdh.h"
+#include "nrf_soc.h"
+
+/**Constants for timeslot API
+ */
+static nrf_radio_request_t m_timeslot_request;
+static uint32_t m_slot_length;
+
+/**@brief Radio event handler
+ */
+void RADIO_timeslot_IRQHandler(void);
+
+/**@brief Request next timeslot event in earliest configuration
+ */
+uint32_t request_next_event_earliest(void);
+
+/**@brief Configure next timeslot event in earliest configuration
+ */
+void configure_next_event_earliest(void);
+
+/**@brief Configure next timeslot event in normal configuration
+ */
+void configure_next_event_normal(void);
+
+/**@brief Timeslot signal handler
+ */
+void nrf_evt_signal_handler(uint32_t evt_id);
+
+/**@brief Timeslot event handler
+ */
+nrf_radio_signal_callback_return_param_t *radio_callback(uint8_t signal_type);
+
+/**@brief Function for initializing the timeslot API.
+ */
+uint32_t timeslot_sd_init(void);
+
+void radio_session_open_example(void);
+static void mcPcfWaitForReady()
+{
+    do
+    {
+        // Make sure any pending events are cleared
+        __SEV();
+        __WFE();
+
+    } while (working_enable == false);
+}
+
+//////////////////////////
 
 Command *PCF7991::GetSpecificCmd(EsyPro::CommunicationCmd_t commCmdType)
 {
@@ -124,26 +181,26 @@ void adapt(int offset)
     uint8_t readval = readPCF7991Reg((1 << 7) | samplingT); // Set Sampling Time + Cmd
     NRF_LOG_INFO("adapt readval: %x", readval);
 }
-void pin_ISR(nrf_drv_gpiote_pin_t pin, nrf_gpiote_polarity_t action)
-{
-    uint32_t travelTime = nrf_drv_timer_capture(&TIMER_TEST, NRF_TIMER_CC_CHANNEL0);
-    // NRF_LOG_INFO("TRAVEL TIME: %d", travelTime);
-    nrf_drv_timer_clear(&TIMER_TEST);
-    if (nrf_gpio_pin_read(din_pin))
-    {
-        travelTime &= ~1;
-    }
-    else
-    {
-        travelTime |= 1;
-    }
-    /*Handle over flow*/
+// void pin_ISR(nrf_drv_gpiote_pin_t pin, nrf_gpiote_polarity_t action)
+// {
+//     uint32_t travelTime = nrf_drv_timer_capture(&TIMER_TEST, NRF_TIMER_CC_CHANNEL0);
+//     NRF_LOG_INFO("TRAVEL TIME: %d", travelTime);
+//     nrf_drv_timer_clear(&TIMER_TEST);
+//     if (nrf_gpio_pin_read(din_pin))
+//     {
+//         travelTime &= ~1;
+//     }
+//     else
+//     {
+//         travelTime |= 1;
+//     }
+//     /*Handle over flow*/
 
-    isrtimes_ptr[isrCnt] = travelTime;
+//     isrtimes_ptr[isrCnt] = travelTime;
 
-    if (isrCnt < 400)
-        isrCnt++;
-}
+//     if (isrCnt < 400)
+//         isrCnt++;
+// }
 
 void initTransponder()
 {
@@ -230,7 +287,7 @@ void writeToTag(uint8_t *data, int bits)
             }
         }
     }
-
+    // NVIC_EnableIRQ(TIMER0_IRQn);
     // end of transmission
     if (decodemode == 0)
         nrf_delay_us(1200);
@@ -269,7 +326,7 @@ void initTimer()
         timer_cfg.bit_width = NRF_TIMER_BIT_WIDTH_32;
         timer_cfg.frequency = NRF_TIMER_FREQ_250kHz;
 
-        err_code = nrf_drv_timer_init(&TIMER_TEST, &timer_cfg, timer_event_handler); // Assuming no handler needed
+        err_code = nrf_drv_timer_init(&TIMER_TEST, &timer_cfg, NULL); // Assuming no handler needed
         APP_ERROR_CHECK(err_code);
 
         nrf_drv_timer_enable(&TIMER_TEST);
@@ -288,11 +345,11 @@ int processManchester()
     int start = 0;
     int pulsetime_fil = 0;
 
-    for (start = 0; start < 10; start++)
-    {
-        if (isrtimes_ptr[start] < 55)
-            break;
-    }
+     for (start = 0; start < 10; start++)
+     {
+         if (isrtimes_ptr[start] < 60)
+             break;
+     }
     start += 3;
     /* Aadapt filtered pulse time during first pulses */
     int pulsetime_accum = 0;
@@ -310,10 +367,10 @@ int processManchester()
 
     for (int i = start; i < isrCnt; i++)
     {
-        // int pulsetime_thresh = pulsetime_fil + (pulsetime_fil/2);
-        int pulsetime_thresh = 55;
+        int pulsetime_thresh = pulsetime_fil + (pulsetime_fil/2);
+        //int pulsetime_thresh = 55;
         int travelTime = isrtimes_ptr[i];
-        // NRF_LOG_INFO("%d", travelTime);
+        NRF_LOG_INFO("travelTime: %d", travelTime);
         if (((travelTime & 1) == 1)) // high
         {
             if (travelTime > pulsetime_thresh)
@@ -413,8 +470,8 @@ int processManchester()
     }
     // NRF_LOG_INFO("bytecount: %d", bytecount);
     NRF_LOG_INFO("bytecount: %d, bitcount: %d, errorCnt: %d, state: %d", bytecount, bitcount, errorCnt, state);
-    if ((bytecount == 4) && (bitcount == 0) && (errorCnt == 0))
-    {
+    // if ((bytecount == 4) && (bitcount == 0) && (errorCnt == 0))
+    // {
         // NRF_LOG_INFO("bytecount: %d, bitcount: %d, errorCnt: %d, state: %d", bytecount, bitcount, errorCnt, state);
         //  if(bytecount < 4) {
         //      doAllthing();
@@ -435,81 +492,117 @@ int processManchester()
             }
         }
         NRF_LOG_INFO("\n");
-        return bytecount;
-    }
-    else
-    {
-        if((bytecount == 2) && (errorCnt == 0)) {
-            for (int s = 0; s < bytecount && s < 20; s++)
-            {
-                byte_to_send.push_back(mybytes[s]);
-                NRF_LOG_INFO("0x%x", mybytes[s]);
-            }
-        }
-    }
+    //     return bytecount;
+    // }
+    // else
+    // {
+    //     if ((bytecount == 2) && (errorCnt == 0))
+        // {
+    //         for (int s = 0; s < bytecount && s < 20; s++)
+    //         {
+    //             byte_to_send.push_back(mybytes[s]);
+    //             NRF_LOG_INFO("0x%x", mybytes[s]);
+    //         }
+    //     }
+    // }
     // NRF_LOG_INFO("bytecount: %d", res);
     return 0;
 }
 
-void gpio_init_interrupt(void)
+static void time_slot_soc_evt_handler(uint32_t evt_id, void *p_context)
 {
-    if (!gpiote_initialized)
-    {
-        ret_code_t err_code;
-
-        err_code = nrf_drv_gpiote_init();
-        APP_ERROR_CHECK(err_code);
-
-        nrf_drv_gpiote_in_config_t in_config = GPIOTE_CONFIG_IN_SENSE_TOGGLE(true);
-        in_config.pull = NRF_GPIO_PIN_PULLUP;
-
-        err_code = nrf_drv_gpiote_in_init(din_pin, &in_config, pin_ISR);
-        APP_ERROR_CHECK(err_code);
-
-        nrf_drv_gpiote_in_event_enable(din_pin, true);
-        gpiote_initialized = true;
-    }
+    nrf_evt_signal_handler(evt_id);
 }
+
+//void gpio_init_interrupt(void)
+//{
+//    if (!gpiote_initialized)
+//    {
+//        ret_code_t err_code;
+
+//        err_code = nrf_drv_gpiote_init();
+//        APP_ERROR_CHECK(err_code);
+
+//        nrf_drv_gpiote_in_config_t in_config = GPIOTE_CONFIG_IN_SENSE_TOGGLE(true);
+//        in_config.pull = NRF_GPIO_PIN_PULLUP;
+
+//        err_code = nrf_drv_gpiote_in_init(din_pin, &in_config, pin_ISR);
+//        APP_ERROR_CHECK(err_code);
+
+//        nrf_drv_gpiote_in_event_enable(din_pin, true);
+//        gpiote_initialized = true;
+//    }
+//}
 
 void readTagResp(void)
 {
     writePCF7991Reg(0xe0, 3);
-    initTimer();
     isrCnt = 0;
-    // nrf_gpio_pin_toggle(TEST_PIN);
+    int32_t travelTime;
+    bool prev_din_pin_state = nrf_gpio_pin_read(din_pin);
+    //NVIC_DisableIRQ(TIMER0_IRQn);
 
-    gpio_init_interrupt();
+        for (int i = 0; i < 10000; i++)
+        {
+            /*How I can check state of din_pin change and capture time from Timer0CC*/
+            if(nrf_gpio_pin_read(din_pin) != prev_din_pin_state) {
+                NRF_TIMER0->TASKS_CAPTURE[0] = 1;
+                travelTime = NRF_TIMER0->CC[0];
+                if (nrf_gpio_pin_read(din_pin))
+                {
+                    travelTime &= ~1;
+                }
+                else
+                {
+                    travelTime |= 1;
+                }
+                
+                // isrtimes_ptr[isrCnt] = travelTime;
+                // /NRF_LOG_INFO("captured_time: %d", travelTime);
+                if(isrCnt < 400) {
+                    if(isrCnt == 0) {
+                        isrtimes_ptr[isrCnt] = travelTime;
+                    } else {
+                        isrtimes_ptr[isrCnt] = travelTime - isrtimes_ptr[isrCnt-1];
+                    }
+                    // NRF_LOG_INFO("captured_time: %d", isrtimes_ptr[isrCnt]);
+                }
+                
+                isrCnt++;
+                
+                prev_din_pin_state = nrf_gpio_pin_read(din_pin);
+            }
+        }
+        // nrf_delay_us(1);
+    
 
-    for (volatile int i = 0; i < 300; i++)
-        for (volatile int k = 0; k < 300; k++)
-            ;
+    //NVIC_EnableIRQ(TIMER0_IRQn);
 
-    if (isrCnt < 400 && isrCnt > 3)
-    {
-        isrtimes_ptr[isrCnt - 1] = isrtimes_ptr[isrCnt - 2] + 201;
-        isrCnt++;
-    }
-
-    // nrf_drv_gpiote_in_event_disable(din_pin);
-    //  gpiote_initialized = false;
+    // if (isrCnt < 400 && isrCnt > 3)
+    // {
+    //     isrtimes_ptr[isrCnt - 1] = isrtimes_ptr[isrCnt - 2] + 201;
+    //     isrCnt++;
+    // }
+    working_enable = false;
 }
 
 int communicateTag(uint8_t *tagcmd, unsigned int cmdLengt)
 {
     int result;
     isrtimes_ptr = isrtimes;
+    mcPcfWaitForReady();
     writeToTag(tagcmd, cmdLengt);
     readTagResp();
 
-    // NRF_LOG_INFO("ISRcnt: 0x%d", isrCnt);
+    NRF_LOG_INFO("ISRcnt: 0x%d", isrCnt);
 
     if (debug)
     {
-        char hash[5];
-        // for(int s=0; s<isrCnt; s++)
-        // {
-        //   NRF_LOG_INFO("%d, ", isrtimes[s]);
-        // }
+        //char hash[5];
+         for(int s=0; s<10; s++)
+         {
+           NRF_LOG_INFO("%d, ", isrtimes[s]);
+         }
     }
     if (decodemode == 0)
         result = processManchester();
@@ -522,7 +615,7 @@ int communicateTag(uint8_t *tagcmd, unsigned int cmdLengt)
 void tester()
 {
     isrCnt = 0;
-    gpio_init_interrupt();
+    //gpio_init_interrupt();
 
     uint8_t phase = readPCF7991Reg(0x08);
 
@@ -596,6 +689,9 @@ void ReadCommand::Execute(CommPacket_t *commResPacket,
                           CommunicationType_t commType)
 {
     byte_to_send.clear();
+    NRF_SDH_SOC_OBSERVER(m_time_slot_soc_observer, 0, time_slot_soc_evt_handler, NULL);
+    timeslot_sd_init();
+    working_enable = false;
     std::vector<std::string> test = req_read_set;
     for (int k = 0; k < test.size(); k++)
     {
@@ -610,7 +706,7 @@ void ReadCommand::Execute(CommPacket_t *commResPacket,
         }
 
         int result = communicateTag(authcmd, cmdlength);
-        nrf_delay_ms(20);
+        // nrf_delay_ms(20);
     }
     // NRF_LOG_INFO("byte_to_send.size(): %d", byte_to_send.size());
     // NRF_LOG_INFO("VALID_RESPONSE_SIZE_TRANS: %d", VALID_RESPONSE_SIZE_TRANS);
@@ -653,8 +749,9 @@ void WriteCommand::Execute(CommPacket_t *commResPacket,
         int result = communicateTag(authcmd, cmdlength);
         nrf_delay_ms(20);
     }
-    //NRF_LOG_INFO("byte_to_send.size(): %d", byte_to_send.size());
-    if(byte_to_send.size() == VALID_WRITE_RESPONSE_SIZE_TRANS) {
+    // NRF_LOG_INFO("byte_to_send.size(): %d", byte_to_send.size());
+    if (byte_to_send.size() == VALID_WRITE_RESPONSE_SIZE_TRANS)
+    {
         commResPacket->buffer[0] = 1;
         commResPacket->cmd = CMD_BASIC_TRANS_WRITE_DATA_RES;
         commResPacket->bleUUID = CUSTOM_VALUE_READ_CHAR_UUID;
@@ -662,3 +759,196 @@ void WriteCommand::Execute(CommPacket_t *commResPacket,
     }
     this->SetCommandRepeatState(false);
 }
+void PCF7991::Setup(void)
+{
+    working_enable = false;
+    // sd_radio_session_open(radio_callback);
+    // adio_session_open_example();
+
+    PCF7991::SetupCommand setupCommand;
+    // PCF7991::ReadCommand readCommand;
+
+    // Create instances of CommPacket_t (ensure you have proper constructors or initializations)
+    CommPacket_t commResPacket;
+    CommPacket_t commReqPacket;
+
+    setupCommand.Execute(&commResPacket, &commReqPacket, PC_COMM_TYPE);
+    // readCommand.Execute(&commResPacket, &commReqPacket, PC_COMM_TYPE);
+
+    NRF_LOG_INFO("EOF-----------------------------------------------\n");
+}
+
+/////////////////////////////////
+
+static nrf_radio_signal_callback_return_param_t signal_callback_return_param;
+
+/**@brief Request next timeslot event in earliest configuration
+ */
+uint32_t request_next_event_earliest(void)
+{
+    m_slot_length                                  = 25000;
+    m_timeslot_request.request_type                = NRF_RADIO_REQ_TYPE_EARLIEST;
+    m_timeslot_request.params.earliest.hfclk       = NRF_RADIO_HFCLK_CFG_XTAL_GUARANTEED;
+    m_timeslot_request.params.earliest.priority    = NRF_RADIO_PRIORITY_NORMAL;
+    m_timeslot_request.params.earliest.length_us   = m_slot_length;
+    m_timeslot_request.params.earliest.timeout_us  = 1000000;
+    return sd_radio_request(&m_timeslot_request);
+}
+
+
+/**@brief Configure next timeslot event in earliest configuration
+ */
+void configure_next_event_earliest(void)
+{
+    m_slot_length                                  = 25000;
+    m_timeslot_request.request_type                = NRF_RADIO_REQ_TYPE_EARLIEST;
+    m_timeslot_request.params.earliest.hfclk       = NRF_RADIO_HFCLK_CFG_XTAL_GUARANTEED;
+    m_timeslot_request.params.earliest.priority    = NRF_RADIO_PRIORITY_NORMAL;
+    m_timeslot_request.params.earliest.length_us   = m_slot_length;
+    m_timeslot_request.params.earliest.timeout_us  = 1000000;
+}
+
+
+/**@brief Configure next timeslot event in normal configuration
+ */
+void configure_next_event_normal(void)
+{
+    m_slot_length                                 = 25000;
+    m_timeslot_request.request_type               = NRF_RADIO_REQ_TYPE_NORMAL;
+    m_timeslot_request.params.normal.hfclk        = NRF_RADIO_HFCLK_CFG_XTAL_GUARANTEED;
+    m_timeslot_request.params.normal.priority     = NRF_RADIO_PRIORITY_HIGH;
+    m_timeslot_request.params.normal.distance_us  = 100000;
+    m_timeslot_request.params.normal.length_us    = m_slot_length;
+}
+
+/**@brief Timeslot signal handler
+ */
+void nrf_evt_signal_handler(uint32_t evt_id)
+{
+    NRF_LOG_INFO("evt_id %d", evt_id);
+    uint32_t err_code;
+
+    switch (evt_id)
+    {
+    case NRF_EVT_RADIO_SIGNAL_CALLBACK_INVALID_RETURN:
+        // No implementation needed
+        break;
+    case NRF_EVT_RADIO_SESSION_IDLE:
+        working_enable = false;
+        if (keep_running)
+        {
+            err_code = request_next_event_earliest();
+            APP_ERROR_CHECK(err_code);
+        }
+        // No implementation needed
+        break;
+    case NRF_EVT_RADIO_SESSION_CLOSED:
+        // No implementation needed, session ended
+        working_enable = false;
+        break;
+    case NRF_EVT_RADIO_BLOCKED:
+        // Fall through
+    case NRF_EVT_RADIO_CANCELED:
+        if (keep_running)
+        {
+            err_code = request_next_event_earliest();
+            APP_ERROR_CHECK(err_code);
+        }
+        break;
+    default:
+        break;
+    }
+}
+
+/**@brief Timeslot event handler
+ */
+nrf_radio_signal_callback_return_param_t *radio_callback(uint8_t signal_type)
+{
+    // NRF_LOG_INFO("signal_type %d", signal_type);
+    switch (signal_type)
+    {
+    case NRF_RADIO_CALLBACK_SIGNAL_TYPE_START:
+        // Start of the timeslot - set up timer interrupt
+        signal_callback_return_param.params.request.p_next = NULL;
+        signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_NONE;
+        NRF_TIMER0->INTENSET = TIMER_INTENSET_COMPARE0_Msk;
+        NRF_TIMER0->CC[0] = m_slot_length - 1000;
+        NVIC_EnableIRQ(TIMER0_IRQn);
+        // nrf_gpio_pin_set(13); //Toggle LED
+        working_enable = true;
+        break;
+
+    case NRF_RADIO_CALLBACK_SIGNAL_TYPE_RADIO:
+        signal_callback_return_param.params.request.p_next = NULL;
+        signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_NONE;
+        break;
+
+    case NRF_RADIO_CALLBACK_SIGNAL_TYPE_TIMER0:
+        working_enable = false;
+        // nrf_gpio_pin_clear(13);
+        signal_callback_return_param.params.extend.length_us = m_slot_length;
+        if (keep_running)
+        {
+            // Timer interrupt - do graceful shutdown - schedule next timeslot
+            configure_next_event_normal();
+            signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_EXTEND;
+        }
+        else
+        {
+            signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_REQUEST_AND_END;
+        }
+        break;
+    case NRF_RADIO_CALLBACK_SIGNAL_TYPE_EXTEND_SUCCEEDED:
+        // No implementation needed
+        // nrf_gpio_pin_set(13);
+        // working_enable = true;
+        NRF_TIMER0->TASKS_CLEAR = 1;
+        break;
+    case NRF_RADIO_CALLBACK_SIGNAL_TYPE_EXTEND_FAILED:
+        // Try scheduling a new timeslot
+        // nrf_gpio_pin_clear(13);
+        working_enable = false;
+        configure_next_event_earliest();
+        signal_callback_return_param.params.request.p_next = &m_timeslot_request;
+        signal_callback_return_param.callback_action = NRF_RADIO_SIGNAL_CALLBACK_ACTION_REQUEST_AND_END;
+        break;
+    default:
+        // No implementation needed
+        break;
+    }
+    return (&signal_callback_return_param);
+}
+
+/**@brief Function for initializing the timeslot API.
+ */
+uint32_t timeslot_sd_init(void)
+{
+    uint32_t err_code;
+
+    keep_running = true;
+    working_enable = false;
+
+    nrf_delay_ms(100);
+
+    err_code = sd_radio_session_open(radio_callback);
+    if (err_code != NRF_SUCCESS)
+    {
+        NRF_LOG_INFO("sd_radio_session_open FAIL: %d", err_code); // Log the error code
+        return err_code;
+    }
+
+    err_code = request_next_event_earliest();
+    if (err_code != NRF_SUCCESS)
+    {
+        (void)sd_radio_session_close();
+        NRF_LOG_INFO("sd_radio_session_close FAIL")
+        return err_code;
+    }
+    NRF_LOG_INFO("timeslot_sd_init done")
+
+    // some delay
+    nrf_delay_us(m_slot_length);
+    return NRF_SUCCESS;
+}
+
+/////////////////////////////////

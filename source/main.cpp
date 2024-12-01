@@ -90,9 +90,9 @@ int main(void) {
     Global::InitGpio();
 
     EsyPro::CommunicationObj *pc = new PcCommObj();
-    //EsyPro::CommunicationObj *ble = new BleCommObj();
+    EsyPro::CommunicationObj *ble = new BleCommObj();
     EsyPro::CommunicationModule commPC(pc, EsyPro::PC_COMM_TYPE);
-    //EsyPro::CommunicationModule commBLE(ble, EsyPro::BLE_COMM_TYPE);
+    EsyPro::CommunicationModule commBLE(ble, EsyPro::BLE_COMM_TYPE);
     std::vector<EsyPro::CommunicationModule> commObjs{commPC};
 
     Global::InitPeripheral();
@@ -101,7 +101,7 @@ int main(void) {
                     DEVICE_VERSION[0], DEVICE_VERSION[1], DEVICE_VERSION[2]);
 
     //ReadAllthing();
-    //Setup();
+    Setup();
     while (1) {
         Global::Run(commObjs);
         //nrf_delay_ms(1000);
