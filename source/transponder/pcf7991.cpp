@@ -25,6 +25,8 @@ int32_t hysteresis = 1;
 bool gpiote_initialized = false;
 bool timer_initialized = false;
 std::vector<int> byte_to_send;
+#define TIMER_IRQ_PRIORITY    0  // Highest priority (0-7)
+#define GPIOTE_IRQ_PRIORITY   0  // Highest priority (0-7)
 
 /*ABIC Settings */
 
@@ -124,12 +126,39 @@ void adapt(int offset)
     uint8_t readval = readPCF7991Reg((1 << 7) | samplingT); // Set Sampling Time + Cmd
     NRF_LOG_INFO("adapt readval: %x", readval);
 }
+// void pin_ISR(nrf_drv_gpiote_pin_t pin, nrf_gpiote_polarity_t action)
+// {
+//     uint32_t travelTime = nrf_drv_timer_capture(&TIMER_TEST, NRF_TIMER_CC_CHANNEL0);
+//     // NRF_LOG_INFO("TRAVEL TIME: %d", travelTime);
+//     nrf_drv_timer_clear(&TIMER_TEST);
+//     if (nrf_gpio_pin_read(din_pin))
+//     {
+//         travelTime &= ~1;
+//     }
+//     else
+//     {
+//         travelTime |= 1;
+//     }
+//     /*Handle over flow*/
+
+//     isrtimes_ptr[isrCnt] = travelTime;
+
+//     if (isrCnt < 400)
+//         isrCnt++;
+// }
 void pin_ISR(nrf_drv_gpiote_pin_t pin, nrf_gpiote_polarity_t action)
 {
+    // Enter critical section
+    CRITICAL_REGION_ENTER();
+    
+    // Capture time as quickly as possible
     uint32_t travelTime = nrf_drv_timer_capture(&TIMER_TEST, NRF_TIMER_CC_CHANNEL0);
-    // NRF_LOG_INFO("TRAVEL TIME: %d", travelTime);
+    //NRF_LOG_INFO("TRAVEL TIME: %d", travelTime);
     nrf_drv_timer_clear(&TIMER_TEST);
-    if (nrf_gpio_pin_read(din_pin))
+    // Store pin state immediately
+    bool current_pin_state = nrf_gpio_pin_read(din_pin);
+    
+    if (current_pin_state)
     {
         travelTime &= ~1;
     }
@@ -137,12 +166,15 @@ void pin_ISR(nrf_drv_gpiote_pin_t pin, nrf_gpiote_polarity_t action)
     {
         travelTime |= 1;
     }
-    /*Handle over flow*/
-
-    isrtimes_ptr[isrCnt] = travelTime;
-
+    
     if (isrCnt < 400)
+    {
+        isrtimes_ptr[isrCnt] = travelTime;
         isrCnt++;
+    }
+    
+    // Exit critical section
+    CRITICAL_REGION_EXIT();
 }
 
 void initTransponder()
@@ -268,9 +300,14 @@ void initTimer()
         timer_cfg.mode = NRF_TIMER_MODE_TIMER; // Use TIMER mode for timing intervals
         timer_cfg.bit_width = NRF_TIMER_BIT_WIDTH_32;
         timer_cfg.frequency = NRF_TIMER_FREQ_250kHz;
+        timer_cfg.interrupt_priority = TIMER_IRQ_PRIORITY;
 
         err_code = nrf_drv_timer_init(&TIMER_TEST, &timer_cfg, timer_event_handler); // Assuming no handler needed
         APP_ERROR_CHECK(err_code);
+
+        // NRF_TIMER4->INTENSET = TIMER_INTENSET_COMPARE0_Msk;
+        // NVIC_SetPriority(TIMER4_IRQn, TIMER_IRQ_PRIORITY);
+        // NVIC_EnableIRQ(TIMER4_IRQn);
 
         nrf_drv_timer_enable(&TIMER_TEST);
         timer_initialized = true;
@@ -413,7 +450,7 @@ int processManchester()
     }
     // NRF_LOG_INFO("bytecount: %d", bytecount);
     NRF_LOG_INFO("bytecount: %d, bitcount: %d, errorCnt: %d, state: %d", bytecount, bitcount, errorCnt, state);
-    if ((bytecount == 4) && (bitcount == 0) && (errorCnt == 0))
+    if ((bytecount == 4) && (errorCnt == 0))
     {
         // NRF_LOG_INFO("bytecount: %d, bitcount: %d, errorCnt: %d, state: %d", bytecount, bitcount, errorCnt, state);
         //  if(bytecount < 4) {
@@ -466,6 +503,9 @@ void gpio_init_interrupt(void)
         err_code = nrf_drv_gpiote_in_init(din_pin, &in_config, pin_ISR);
         APP_ERROR_CHECK(err_code);
 
+        NVIC_SetPriority(GPIOTE_IRQn, GPIOTE_IRQ_PRIORITY);
+        // NVIC_EnableIRQ(GPIOTE_IRQn);
+
         nrf_drv_gpiote_in_event_enable(din_pin, true);
         gpiote_initialized = true;
     }
@@ -483,6 +523,7 @@ void readTagResp(void)
     for (volatile int i = 0; i < 300; i++)
         for (volatile int k = 0; k < 300; k++)
             ;
+    // nrf_delay_us(60);
 
     if (isrCnt < 400 && isrCnt > 3)
     {
@@ -610,7 +651,7 @@ void ReadCommand::Execute(CommPacket_t *commResPacket,
         }
 
         int result = communicateTag(authcmd, cmdlength);
-        nrf_delay_ms(20);
+        nrf_delay_ms(19);
     }
     // NRF_LOG_INFO("byte_to_send.size(): %d", byte_to_send.size());
     // NRF_LOG_INFO("VALID_RESPONSE_SIZE_TRANS: %d", VALID_RESPONSE_SIZE_TRANS);
@@ -661,4 +702,18 @@ void WriteCommand::Execute(CommPacket_t *commResPacket,
         commResPacket->bufLen = 1;
     }
     this->SetCommandRepeatState(false);
+}
+void PCF7991::Setup(void)
+{
+    PCF7991::SetupCommand setupCommand;
+    // Transponder::ReadCommand readCommand;
+
+    // Create instances of CommPacket_t (ensure you have proper constructors or initializations)
+    CommPacket_t commResPacket;
+    CommPacket_t commReqPacket;
+
+    setupCommand.Execute(&commResPacket, &commReqPacket, PC_COMM_TYPE);
+    // readCommand.Execute(&commResPacket, &commReqPacket, PC_COMM_TYPE);
+
+    NRF_LOG_INFO("EOF-----------------------------------------------\n");
 }
