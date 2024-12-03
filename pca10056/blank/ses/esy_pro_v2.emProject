@@ -100,6 +100,7 @@
     </folder>
     <folder Name="nrf_drivers">
       <file file_name="../../../../../../integration/nrfx/legacy/nrf_drv_clock.c" />
+      <file file_name="../../../../../../integration/nrfx/legacy/nrf_drv_ppi.c" />
       <file file_name="../../../../../../integration/nrfx/legacy/nrf_drv_spi.c" />
       <file file_name="../../../../../../integration/nrfx/legacy/nrf_drv_twi.c">
         <configuration Name="Release" build_exclude_from_build="No" />
@@ -111,6 +112,7 @@
         <configuration Name="Release" build_exclude_from_build="No" />
       </file>
       <file file_name="../../../../../../modules/nrfx/drivers/src/nrfx_gpiote.c" />
+      <file file_name="../../../../../../modules/nrfx/drivers/src/nrfx_ppi.c" />
       <file file_name="../../../../../../modules/nrfx/drivers/src/nrfx_spim.c" />
       <file file_name="../../../../../../modules/nrfx/drivers/src/nrfx_timer.c">
         <configuration Name="Release" build_exclude_from_build="No" />

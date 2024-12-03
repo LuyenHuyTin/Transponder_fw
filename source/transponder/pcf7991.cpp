@@ -155,10 +155,8 @@ void pin_ISR(nrf_drv_gpiote_pin_t pin, nrf_gpiote_polarity_t action)
     uint32_t travelTime = nrf_drv_timer_capture(&TIMER_TEST, NRF_TIMER_CC_CHANNEL0);
     //NRF_LOG_INFO("TRAVEL TIME: %d", travelTime);
     nrf_drv_timer_clear(&TIMER_TEST);
-    // Store pin state immediately
-    bool current_pin_state = nrf_gpio_pin_read(din_pin);
     
-    if (current_pin_state)
+    if (nrf_gpio_pin_read(din_pin))
     {
         travelTime &= ~1;
     }
@@ -169,8 +167,7 @@ void pin_ISR(nrf_drv_gpiote_pin_t pin, nrf_gpiote_polarity_t action)
     
     if (isrCnt < 400)
     {
-        isrtimes_ptr[isrCnt] = travelTime;
-        isrCnt++;
+        isrtimes_ptr[isrCnt++] = travelTime;
     }
     
     // Exit critical section
@@ -450,7 +447,7 @@ int processManchester()
     }
     // NRF_LOG_INFO("bytecount: %d", bytecount);
     NRF_LOG_INFO("bytecount: %d, bitcount: %d, errorCnt: %d, state: %d", bytecount, bitcount, errorCnt, state);
-    if ((bytecount == 4) && (errorCnt == 0))
+    if ((bytecount == 4) && (bitcount == 0) && (errorCnt == 0))
     {
         // NRF_LOG_INFO("bytecount: %d, bitcount: %d, errorCnt: %d, state: %d", bytecount, bitcount, errorCnt, state);
         //  if(bytecount < 4) {
@@ -511,7 +508,7 @@ void gpio_init_interrupt(void)
     }
 }
 
-void readTagResp(void)
+void readTagResp(int delay_time)
 {
     writePCF7991Reg(0xe0, 3);
     initTimer();
@@ -520,9 +517,28 @@ void readTagResp(void)
 
     gpio_init_interrupt();
 
-    for (volatile int i = 0; i < 300; i++)
-        for (volatile int k = 0; k < 300; k++)
-            ;
+    switch(delay_time){
+        case 0:
+            for (volatile int i = 0; i < 220; i++)
+                for (volatile int k = 0; k < 220; k++)
+                    ;
+            break;
+        case 1:
+            for (volatile int i = 0; i < 300; i++)
+                for (volatile int k = 0; k < 400; k++)
+                    ;
+            break;
+        case 2:
+            for (volatile int i = 0; i < 300; i++)
+                for (volatile int k = 0; k < 300; k++)
+                    ;
+            break;
+        default:
+            break;
+    }
+    // for (volatile int i = 0; i < 300; i++)
+    //     for (volatile int k = 0; k < 300; k++)
+    //         ;
     // nrf_delay_us(60);
 
     if (isrCnt < 400 && isrCnt > 3)
@@ -535,12 +551,12 @@ void readTagResp(void)
     //  gpiote_initialized = false;
 }
 
-int communicateTag(uint8_t *tagcmd, unsigned int cmdLengt)
+int communicateTag(uint8_t *tagcmd, unsigned int cmdLengt, int delay_time)
 {
     int result;
     isrtimes_ptr = isrtimes;
     writeToTag(tagcmd, cmdLengt);
-    readTagResp();
+    readTagResp(delay_time);
 
     // NRF_LOG_INFO("ISRcnt: 0x%d", isrCnt);
 
@@ -638,6 +654,8 @@ void ReadCommand::Execute(CommPacket_t *commResPacket,
 {
     byte_to_send.clear();
     std::vector<std::string> test = req_read_set;
+    //int time_delay[] = {17, 17, 17, 17, 17, 19, 18, 18, 18};
+    int delay_time[] = {0, 2, 1, 2, 0, 0, 0, 0, 0, 0, 0};
     for (int k = 0; k < test.size(); k++)
     {
         uint8_t cmdlength = serialToByte(test[k]);
@@ -650,8 +668,8 @@ void ReadCommand::Execute(CommPacket_t *commResPacket,
             }
         }
 
-        int result = communicateTag(authcmd, cmdlength);
-        nrf_delay_ms(19);
+        int result = communicateTag(authcmd, cmdlength, delay_time[k]);
+        nrf_delay_ms(20);
     }
     // NRF_LOG_INFO("byte_to_send.size(): %d", byte_to_send.size());
     // NRF_LOG_INFO("VALID_RESPONSE_SIZE_TRANS: %d", VALID_RESPONSE_SIZE_TRANS);
@@ -691,7 +709,7 @@ void WriteCommand::Execute(CommPacket_t *commResPacket,
             }
         }
 
-        int result = communicateTag(authcmd, cmdlength);
+        int result = communicateTag(authcmd, cmdlength, 2);
         nrf_delay_ms(20);
     }
     //NRF_LOG_INFO("byte_to_send.size(): %d", byte_to_send.size());
@@ -706,14 +724,14 @@ void WriteCommand::Execute(CommPacket_t *commResPacket,
 void PCF7991::Setup(void)
 {
     PCF7991::SetupCommand setupCommand;
-    // Transponder::ReadCommand readCommand;
+    PCF7991::ReadCommand readCommand;
 
     // Create instances of CommPacket_t (ensure you have proper constructors or initializations)
     CommPacket_t commResPacket;
     CommPacket_t commReqPacket;
 
     setupCommand.Execute(&commResPacket, &commReqPacket, PC_COMM_TYPE);
-    // readCommand.Execute(&commResPacket, &commReqPacket, PC_COMM_TYPE);
+    readCommand.Execute(&commResPacket, &commReqPacket, PC_COMM_TYPE);
 
     NRF_LOG_INFO("EOF-----------------------------------------------\n");
 }
