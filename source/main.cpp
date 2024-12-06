@@ -101,7 +101,7 @@ int main(void) {
                     DEVICE_VERSION[0], DEVICE_VERSION[1], DEVICE_VERSION[2]);
 
     //ReadAllthing();
-    Setup();
+    //Setup();
     while (1) {
         Global::Run(commObjs);
         //nrf_delay_ms(1000);

@@ -480,6 +480,13 @@ int processManchester()
                 NRF_LOG_INFO("0x%x", mybytes[s]);
             }
         }
+        else {
+            for (int s = 0; s < 4 && s < 20; s++)
+            {
+                byte_to_send.push_back(0);
+                //NRF_LOG_INFO("0x%x", mybytes[s]);
+            }
+        }
     }
     // NRF_LOG_INFO("bytecount: %d", res);
     return 0;
@@ -653,7 +660,7 @@ void ReadCommand::Execute(CommPacket_t *commResPacket,
                           CommunicationType_t commType)
 {
     byte_to_send.clear();
-    std::vector<std::string> test = req_read_set;
+    std::vector<std::string> test = mesReqRead;
     //int time_delay[] = {17, 17, 17, 17, 17, 19, 18, 18, 18};
     int delay_time[] = {0, 2, 1, 2, 0, 0, 0, 0, 0, 0, 0};
     for (int k = 0; k < test.size(); k++)
@@ -671,7 +678,7 @@ void ReadCommand::Execute(CommPacket_t *commResPacket,
         int result = communicateTag(authcmd, cmdlength, delay_time[k]);
         nrf_delay_ms(20);
     }
-    // NRF_LOG_INFO("byte_to_send.size(): %d", byte_to_send.size());
+    NRF_LOG_INFO("byte_to_send.size(): %d", byte_to_send.size());
     // NRF_LOG_INFO("VALID_RESPONSE_SIZE_TRANS: %d", VALID_RESPONSE_SIZE_TRANS);
     if (byte_to_send.size() == VALID_READ_RESPONSE_SIZE_TRANS)
     {
@@ -683,6 +690,14 @@ void ReadCommand::Execute(CommPacket_t *commResPacket,
         commResPacket->bleUUID = CUSTOM_VALUE_READ_CHAR_UUID;
         commResPacket->bufLen = VALID_READ_RESPONSE_SIZE_TRANS;
     }
+    else
+    {
+        commResPacket->buffer[0] = 0;
+        commResPacket->cmd = CMD_BASIC_TRANS_READ_DATA_RES;
+        commResPacket->bleUUID = CUSTOM_VALUE_READ_CHAR_UUID;
+        commResPacket->bufLen = VALID_READ_RESPONSE_SIZE_TRANS;
+    }
+    byte_to_send.clear();
     this->SetCommandRepeatState(false);
 }
 
@@ -691,11 +706,18 @@ void WriteCommand::Execute(CommPacket_t *commResPacket,
                            CommunicationType_t commType)
 {
     byte_to_send.clear();
-    uint8_t receiver[commReqPacket->bufLen]; // Create an array to hold 4 bytes
-    // NRF_LOG_INFO("length: %d", commReqPacket->bufLen);
-    memcpy(receiver, commReqPacket->buffer, commReqPacket->bufLen);
+    uint8_t receiver[commReqPacket->bufLen - 1]; // Create an array to hold 4 bytes
+
+    uint8_t positionPage;
+    NRF_LOG_INFO("length: %d", commReqPacket->bufLen);
+    memcpy(receiver, commReqPacket->buffer, commReqPacket->bufLen - 1);
+    memcpy(&positionPage, &commReqPacket->buffer[commReqPacket->bufLen - 1], 1);
+    NRF_LOG_INFO("positionPage: %d", positionPage - '0');
+    positionPage = positionPage - '0';
     std::string data_to_write = hexToString(receiver, sizeof(receiver));
-    std::vector<std::string> test = req_write_set;
+
+    std::vector<std::string> test = mesReqWrite;
+    test.push_back(mesEachPage[positionPage]);
     test.push_back(data_to_write);
     for (int k = 0; k < test.size(); k++)
     {
@@ -712,26 +734,30 @@ void WriteCommand::Execute(CommPacket_t *commResPacket,
         int result = communicateTag(authcmd, cmdlength, 2);
         nrf_delay_ms(20);
     }
-    //NRF_LOG_INFO("byte_to_send.size(): %d", byte_to_send.size());
+    NRF_LOG_INFO("byte_to_send.size(): %d", byte_to_send.size());
     if(byte_to_send.size() == VALID_WRITE_RESPONSE_SIZE_TRANS) {
-        commResPacket->buffer[0] = 1;
+        for (int i = 0; i < 2; i++)
+        {
+            commResPacket->buffer[i] = byte_to_send[i + 8];
+        }
         commResPacket->cmd = CMD_BASIC_TRANS_WRITE_DATA_RES;
         commResPacket->bleUUID = CUSTOM_VALUE_READ_CHAR_UUID;
-        commResPacket->bufLen = 1;
+        commResPacket->bufLen = 2;
     }
+    byte_to_send.clear();
     this->SetCommandRepeatState(false);
 }
 void PCF7991::Setup(void)
 {
     PCF7991::SetupCommand setupCommand;
-    PCF7991::ReadCommand readCommand;
+    //PCF7991::ReadCommand readCommand;
 
     // Create instances of CommPacket_t (ensure you have proper constructors or initializations)
     CommPacket_t commResPacket;
     CommPacket_t commReqPacket;
 
     setupCommand.Execute(&commResPacket, &commReqPacket, PC_COMM_TYPE);
-    readCommand.Execute(&commResPacket, &commReqPacket, PC_COMM_TYPE);
+    //readCommand.Execute(&commResPacket, &commReqPacket, PC_COMM_TYPE);
 
     NRF_LOG_INFO("EOF-----------------------------------------------\n");
 }
