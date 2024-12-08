@@ -174,7 +174,7 @@ void pin_ISR(nrf_drv_gpiote_pin_t pin, nrf_gpiote_polarity_t action)
     CRITICAL_REGION_EXIT();
 }
 
-void initTransponder()
+int initTransponder()
 {
     AbicConf_Page0.SetPageCmd = 1;
     AbicConf_Page1.SetPageCmd = 1;
@@ -208,6 +208,7 @@ void initTransponder()
 
     int checkAntena = readPCF7991Reg(0x7);
     NRF_LOG_INFO("checkAntena: %d", checkAntena);
+    return checkAntena;
 }
 
 void writeToTag(uint8_t *data, int bits)
@@ -473,7 +474,7 @@ int processManchester()
     }
     else
     {
-        if((bytecount == 2) && (errorCnt == 0)) {
+        if((bytecount == 2) && (errorCnt == 0) && (bitcount == 2)) {
             for (int s = 0; s < bytecount && s < 20; s++)
             {
                 byte_to_send.push_back(mybytes[s]);
@@ -646,13 +647,27 @@ void SetupCommand::Execute(CommPacket_t *commResPacket,
                            const CommPacket_t *commReqPacket,
                            CommunicationType_t commType)
 {
-    initTransponder();
+    int m_Antenna = initTransponder();
     AbicConf_Page1.txdis = 0;
     writePCF7991Reg(AbicConf_Page0.byteval, 8);
     writePCF7991Reg(AbicConf_Page2.byteval, 8);
     writePCF7991Reg(AbicConf_Page1.byteval, 8); // rf on
 
     adapt(rfoffset);
+    NRF_LOG_INFO("m_Antenna: %d", m_Antenna);
+    if((((m_Antenna >> 5) & 0x01) == 1) && (m_Antenna != 255)) {
+        commResPacket->bleUUID = CUSTOM_VALUE_CTR_RES_CHAR_UUID;
+        commResPacket->cmd = CMD_BASIC_TRANS_SETUP_RES;
+        commResPacket->buffer[0] = 1;
+        commResPacket->bufLen = 1;
+    }
+    else
+    {
+        commResPacket->bleUUID = CUSTOM_VALUE_CTR_RES_CHAR_UUID;
+        commResPacket->cmd = CMD_BASIC_TRANS_SETUP_RES;
+        commResPacket->buffer[0] = 0;
+        commResPacket->bufLen = 1;
+    }
 }
 
 void ReadCommand::Execute(CommPacket_t *commResPacket,
@@ -686,13 +701,6 @@ void ReadCommand::Execute(CommPacket_t *commResPacket,
         {
             commResPacket->buffer[i] = byte_to_send[i];
         }
-        commResPacket->cmd = CMD_BASIC_TRANS_READ_DATA_RES;
-        commResPacket->bleUUID = CUSTOM_VALUE_READ_CHAR_UUID;
-        commResPacket->bufLen = VALID_READ_RESPONSE_SIZE_TRANS;
-    }
-    else
-    {
-        commResPacket->buffer[0] = 0;
         commResPacket->cmd = CMD_BASIC_TRANS_READ_DATA_RES;
         commResPacket->bleUUID = CUSTOM_VALUE_READ_CHAR_UUID;
         commResPacket->bufLen = VALID_READ_RESPONSE_SIZE_TRANS;
