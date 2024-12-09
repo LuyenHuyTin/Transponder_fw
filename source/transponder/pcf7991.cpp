@@ -202,7 +202,7 @@ void adapt(int offset)
 //         isrCnt++;
 // }
 
-void initTransponder()
+int initTransponder()
 {
     AbicConf_Page0.SetPageCmd = 1;
     AbicConf_Page1.SetPageCmd = 1;
@@ -218,6 +218,7 @@ void initTransponder()
     // nrf_gpio_cfg_output(CLKOUT);
     nrf_gpio_cfg_output(SCK_pin);
     nrf_gpio_cfg_output(dout_pin);
+    nrf_gpio_cfg_output(22);
     nrf_gpio_cfg_input(din_pin, NRF_GPIO_PIN_PULLUP);
 
     nrf_gpio_pin_set(SCK_pin);
@@ -236,6 +237,7 @@ void initTransponder()
 
     int checkAntena = readPCF7991Reg(0x7);
     NRF_LOG_INFO("checkAntena: %d", checkAntena);
+    return checkAntena;
 }
 
 void writeToTag(uint8_t *data, int bits)
@@ -539,41 +541,68 @@ void readTagResp(void)
     writePCF7991Reg(0xe0, 3);
     isrCnt = 0;
     int32_t travelTime;
-    bool prev_din_pin_state = nrf_gpio_pin_read(din_pin);
     //NVIC_DisableIRQ(TIMER0_IRQn);
 
-        for (int i = 0; i < 10000; i++)
-        {
-            /*How I can check state of din_pin change and capture time from Timer0CC*/
-            if(nrf_gpio_pin_read(din_pin) != prev_din_pin_state) {
-                NRF_TIMER0->TASKS_CAPTURE[0] = 1;
-                travelTime = NRF_TIMER0->CC[0];
-                if (nrf_gpio_pin_read(din_pin))
-                {
-                    travelTime &= ~1;
-                }
-                else
-                {
-                    travelTime |= 1;
-                }
+        // for (int i = 0; i < 10000; i++)
+        // {
+        //     /*How I can check state of din_pin change and capture time from Timer0CC*/
+        //     if(nrf_gpio_pin_read(din_pin) != prev_din_pin_state) {
+        //         NRF_TIMER0->TASKS_CAPTURE[0] = 1;
+        //         travelTime = NRF_TIMER0->CC[0];
+        //         if (nrf_gpio_pin_read(din_pin))
+        //         {
+        //             travelTime &= ~1;
+        //         }
+        //         else
+        //         {
+        //             travelTime |= 1;
+        //         }
                 
-                // isrtimes_ptr[isrCnt] = travelTime;
-                // /NRF_LOG_INFO("captured_time: %d", travelTime);
-                if(isrCnt < 400) {
-                    if(isrCnt == 0) {
-                        isrtimes_ptr[isrCnt] = travelTime;
-                    } else {
-                        isrtimes_ptr[isrCnt] = travelTime - isrtimes_ptr[isrCnt-1];
-                    }
-                    // NRF_LOG_INFO("captured_time: %d", isrtimes_ptr[isrCnt]);
-                }
+        //         // isrtimes_ptr[isrCnt] = travelTime;
+        //         // /NRF_LOG_INFO("captured_time: %d", travelTime);
+        //         if(isrCnt < 400) {
+        //             if(isrCnt == 0) {
+        //                 isrtimes_ptr[isrCnt] = travelTime;
+        //             } else {
+        //                 isrtimes_ptr[isrCnt] = travelTime - isrtimes_ptr[isrCnt-1];
+        //             }
+        //             // NRF_LOG_INFO("captured_time: %d", isrtimes_ptr[isrCnt]);
+        //         }
                 
-                isrCnt++;
+        //         isrCnt++;
                 
-                prev_din_pin_state = nrf_gpio_pin_read(din_pin);
-            }
-        }
+        //         prev_din_pin_state = nrf_gpio_pin_read(din_pin);
+        //     }
+        // }
         // nrf_delay_us(1);
+        //nrf_gpio_cfg_output(22);
+        bool prev_din_pin_state = nrf_gpio_pin_read(din_pin);
+        bool pin_22_state = prev_din_pin_state;
+        nrf_gpio_pin_write(22, pin_22_state);
+        // for(volatile int i=0;i<150;i++){
+            for(volatile int j=0;j<9000;j++){
+                if(nrf_gpio_pin_read(din_pin) != prev_din_pin_state) {
+                    // NRF_TIMER0->TASKS_CAPTURE[0] = 1;
+                    travelTime = NRF_TIMER0->CC[0];
+                    if (nrf_gpio_pin_read(din_pin))
+                    {
+                        travelTime &= ~1;
+                    }
+                    else
+                    {
+                        travelTime |= 1;
+                    }
+                    pin_22_state = nrf_gpio_pin_read(din_pin);
+                    // Toggle the state
+                    pin_22_state = !pin_22_state;
+                    
+                    // Write new state to pin 22
+                    nrf_gpio_pin_write(22, pin_22_state);
+                    prev_din_pin_state = nrf_gpio_pin_read(din_pin);
+                }
+            }
+        // }
+            ;
     
 
     //NVIC_EnableIRQ(TIMER0_IRQn);
@@ -609,6 +638,7 @@ int communicateTag(uint8_t *tagcmd, unsigned int cmdLengt)
     else
         result = processManchester();
 
+    working_enable = false;
     return result;
 }
 
@@ -675,13 +705,27 @@ void SetupCommand::Execute(CommPacket_t *commResPacket,
                            const CommPacket_t *commReqPacket,
                            CommunicationType_t commType)
 {
-    initTransponder();
+    int m_Antenna = initTransponder();
     AbicConf_Page1.txdis = 0;
     writePCF7991Reg(AbicConf_Page0.byteval, 8);
     writePCF7991Reg(AbicConf_Page2.byteval, 8);
     writePCF7991Reg(AbicConf_Page1.byteval, 8); // rf on
 
     adapt(rfoffset);
+    NRF_LOG_INFO("m_Antenna: %d", m_Antenna);
+    if((((m_Antenna >> 5) & 0x01) == 1) && (m_Antenna != 255)) {
+        commResPacket->bleUUID = CUSTOM_VALUE_CTR_RES_CHAR_UUID;
+        commResPacket->cmd = CMD_BASIC_TRANS_SETUP_RES;
+        commResPacket->buffer[0] = 1;
+        commResPacket->bufLen = 1;
+    }
+    else
+    {
+        commResPacket->bleUUID = CUSTOM_VALUE_CTR_RES_CHAR_UUID;
+        commResPacket->cmd = CMD_BASIC_TRANS_SETUP_RES;
+        commResPacket->buffer[0] = 0;
+        commResPacket->bufLen = 1;
+    }
 }
 
 void ReadCommand::Execute(CommPacket_t *commResPacket,

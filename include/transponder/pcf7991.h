@@ -75,7 +75,8 @@ namespace PCF7991
 
     class ReadCommand : public EsyPro::Command {
     public:
-        std::vector<std::string> req_read_set = {"05C0"};
+        std::vector<std::string> req_read_set = {"05C0", "204D494B52", "0aD900", "0aC980",
+                                                "0aD140", "0aE0C0", "0aE880", "0aF040", "0aF800"};
         void Execute(EsyPro::CommPacket_t *commResPacket,
                      const EsyPro::CommPacket_t *commReqPacket,
                      EsyPro::CommunicationType_t commType) override;
