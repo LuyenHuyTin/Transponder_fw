@@ -582,8 +582,9 @@ void readTagResp(void)
         // for(volatile int i=0;i<150;i++){
             for(volatile int j=0;j<9000;j++){
                 if(nrf_gpio_pin_read(din_pin) != prev_din_pin_state) {
-                    // NRF_TIMER0->TASKS_CAPTURE[0] = 1;
-                    travelTime = NRF_TIMER0->CC[0];
+                    NRF_TIMER0->TASKS_CAPTURE[3] = 1;
+                    travelTime = NRF_TIMER0->CC[3];
+                    //NRF_LOG_INFO("travelTime: %d", travelTime);
                     if (nrf_gpio_pin_read(din_pin))
                     {
                         travelTime &= ~1;
@@ -591,6 +592,17 @@ void readTagResp(void)
                     else
                     {
                         travelTime |= 1;
+                    }
+                    // isrtimes_ptr[isrCnt] = travelTime;
+                    // /NRF_LOG_INFO("captured_time: %d", travelTime);
+                    if(isrCnt < 400) {
+                        if(isrCnt == 0) {
+                            isrtimes_ptr[isrCnt] = travelTime;
+                        } else {
+                            isrtimes_ptr[isrCnt] = travelTime - isrtimes_ptr[isrCnt-1];
+                        }
+                        // NRF_LOG_INFO("captured_time: %d", isrtimes_ptr[isrCnt]);
+                        isrCnt++;
                     }
                     pin_22_state = nrf_gpio_pin_read(din_pin);
                     // Toggle the state
