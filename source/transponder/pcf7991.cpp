@@ -347,128 +347,128 @@ int processManchester()
     int start = 0;
     int pulsetime_fil = 0;
 
-     for (start = 0; start < 10; start++)
-     {
-         if (isrtimes_ptr[start] < 60)
-             break;
-     }
-    start += 3;
-    /* Aadapt filtered pulse time during first pulses */
-    int pulsetime_accum = 0;
-    for (uint8_t i = start + 1; i < start + 4; i++)
-    {
-        pulsetime_accum += isrtimes_ptr[i];
-    }
-    pulsetime_fil = pulsetime_accum / 4;
+    //  for (start = 0; start < 10; start++)
+    //  {
+    //      if (isrtimes_ptr[start] < 80)
+    //          break;
+    //  }
+    // start += 3;
+    // /* Aadapt filtered pulse time during first pulses */
+    // int pulsetime_accum = 0;
+    // for (uint8_t i = start + 1; i < start + 4; i++)
+    // {
+    //     pulsetime_accum += isrtimes_ptr[i];
+    // }
+    // pulsetime_fil = pulsetime_accum / 4;
 
-    if (((isrtimes_ptr[start]) & 1) == 0)
-    {
-        start--;
-        pulsetime_fil = fir_filter(pulsetime_fil, isrtimes_ptr[start]);
-    }
-
+    // if (((isrtimes_ptr[start]) & 1) == 0)
+    // {
+    //     start--;
+    //     pulsetime_fil = fir_filter(pulsetime_fil, isrtimes_ptr[start]);
+    // }
+    NRF_LOG_INFO("start: %d and isrCnt: %d", start, isrCnt);
     for (int i = start; i < isrCnt; i++)
     {
-        int pulsetime_thresh = pulsetime_fil + (pulsetime_fil/2);
-        //int pulsetime_thresh = 55;
+        //int pulsetime_thresh = pulsetime_fil + (pulsetime_fil/2);
+        int pulsetime_thresh = 55;
         int travelTime = isrtimes_ptr[i];
         NRF_LOG_INFO("travelTime: %d", travelTime);
-        if (((travelTime & 1) == 1)) // high
-        {
-            if (travelTime > pulsetime_thresh)
-            {
-                // travelTime =11;
-                if (state)
-                {
-                    state = 1;
-                    if (lead < 4)
-                    {
-                        lead++;
-                        // Serial.print("X");
-                    }
-                    else
-                    {
-                        mybytes[bytecount] |= (1 << (7 - bitcount++));
-                        // Serial.print("1");
-                    }
-                }
-                else
-                {
-                    // NRF_LOG_INFO("X");
-                    if (bytecount < 1)
-                        errorCnt++;
-                }
-            }
-            else
-            {
-                pulsetime_fil = fir_filter(pulsetime_fil, travelTime);
-                if (state)
-                {
-                    state = 0;
-                    if (lead < 4)
-                    {
-                        lead++;
-                    }
-                    else
-                    {
-                        mybytes[bytecount] |= (1 << (7 - bitcount++));
-                        // Serial.print("1");
-                    }
-                }
-                else
-                {
-                    state++;
-                }
-            }
-        }
-        else
-        {
-            if (travelTime > pulsetime_thresh)
-            {
-                if (state)
-                {
-                    state = 1;
-                    bitcount++;
-                    // Serial.print("0");
-                }
-                else
-                {
-                    // NRF_LOG_INFO("X");
-                    if (bytecount < 1)
-                    {
-                        errorCnt++;
-                    }
-                }
-            }
-            else
-            {
-                pulsetime_fil = fir_filter(pulsetime_fil, travelTime);
-                if (state)
-                {
-                    state = 0;
-                    bitcount++;
-                    // Serial.print("0");
-                }
-                else
-                {
-                    state++;
-                }
-            }
-        }
+        // if (((travelTime & 1) == 1)) // high
+        // {
+        //     if (travelTime > pulsetime_thresh)
+        //     {
+        //         // travelTime =11;
+        //         if (state)
+        //         {
+        //             state = 1;
+        //             if (lead < 4)
+        //             {
+        //                 lead++;
+        //                 // Serial.print("X");
+        //             }
+        //             else
+        //             {
+        //                 mybytes[bytecount] |= (1 << (7 - bitcount++));
+        //                 // Serial.print("1");
+        //             }
+        //         }
+        //         else
+        //         {
+        //             // NRF_LOG_INFO("X");
+        //             if (bytecount < 1)
+        //                 errorCnt++;
+        //         }
+        //     }
+        //     else
+        //     {
+        //         pulsetime_fil = fir_filter(pulsetime_fil, travelTime);
+        //         if (state)
+        //         {
+        //             state = 0;
+        //             if (lead < 4)
+        //             {
+        //                 lead++;
+        //             }
+        //             else
+        //             {
+        //                 mybytes[bytecount] |= (1 << (7 - bitcount++));
+        //                 // Serial.print("1");
+        //             }
+        //         }
+        //         else
+        //         {
+        //             state++;
+        //         }
+        //     }
+        // }
+        // else
+        // {
+        //     if (travelTime > pulsetime_thresh)
+        //     {
+        //         if (state)
+        //         {
+        //             state = 1;
+        //             bitcount++;
+        //             // Serial.print("0");
+        //         }
+        //         else
+        //         {
+        //             // NRF_LOG_INFO("X");
+        //             if (bytecount < 1)
+        //             {
+        //                 errorCnt++;
+        //             }
+        //         }
+        //     }
+        //     else
+        //     {
+        //         pulsetime_fil = fir_filter(pulsetime_fil, travelTime);
+        //         if (state)
+        //         {
+        //             state = 0;
+        //             bitcount++;
+        //             // Serial.print("0");
+        //         }
+        //         else
+        //         {
+        //             state++;
+        //         }
+        //     }
+        // }
 
-        if (bitcount > 7)
-        {
-            bitcount = 0;
-            bytecount++;
-        }
-        if (travelTime > 80)
-        {
-            if (bitcount > 0)
-            {
-                bytecount++;
-            }
-            break;
-        }
+        // if (bitcount > 7)
+        // {
+        //     bitcount = 0;
+        //     bytecount++;
+        // }
+        // if (travelTime > 300)
+        // {
+        //     if (bitcount > 0)
+        //     {
+        //         bytecount++;
+        //     }
+        //     break;
+        // }
     }
     // NRF_LOG_INFO("bytecount: %d", bytecount);
     NRF_LOG_INFO("bytecount: %d, bitcount: %d, errorCnt: %d, state: %d", bytecount, bitcount, errorCnt, state);
@@ -579,8 +579,9 @@ void readTagResp(void)
         bool prev_din_pin_state = nrf_gpio_pin_read(din_pin);
         bool pin_22_state = prev_din_pin_state;
         nrf_gpio_pin_write(22, pin_22_state);
+        int prev_time = 0;
         // for(volatile int i=0;i<150;i++){
-            for(volatile int j=0;j<9000;j++){
+            for(volatile int j=0;j<9100;j++){
                 if(nrf_gpio_pin_read(din_pin) != prev_din_pin_state) {
                     NRF_TIMER0->TASKS_CAPTURE[3] = 1;
                     travelTime = NRF_TIMER0->CC[3];
@@ -596,12 +597,10 @@ void readTagResp(void)
                     // isrtimes_ptr[isrCnt] = travelTime;
                     // /NRF_LOG_INFO("captured_time: %d", travelTime);
                     if(isrCnt < 400) {
-                        if(isrCnt == 0) {
-                            isrtimes_ptr[isrCnt] = travelTime;
-                        } else {
-                            isrtimes_ptr[isrCnt] = travelTime - isrtimes_ptr[isrCnt-1];
-                        }
-                        // NRF_LOG_INFO("captured_time: %d", isrtimes_ptr[isrCnt]);
+                        /*caculate the interval time between 2 capture and store into isrtimes_ptr*/
+                        isrtimes_ptr[isrCnt] = travelTime - prev_time;
+                        //NRF_LOG_INFO("captured_time: %d", isrtimes_ptr[isrCnt]);
+                        prev_time = travelTime;
                         isrCnt++;
                     }
                     pin_22_state = nrf_gpio_pin_read(din_pin);
