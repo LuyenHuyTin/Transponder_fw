@@ -297,7 +297,7 @@ void initTimer()
 
         timer_cfg.mode = NRF_TIMER_MODE_TIMER; // Use TIMER mode for timing intervals
         timer_cfg.bit_width = NRF_TIMER_BIT_WIDTH_32;
-        timer_cfg.frequency = NRF_TIMER_FREQ_250kHz;
+        timer_cfg.frequency = NRF_TIMER_FREQ_1MHz;
         timer_cfg.interrupt_priority = TIMER_IRQ_PRIORITY;
 
         err_code = nrf_drv_timer_init(&TIMER_TEST, &timer_cfg, timer_event_handler); // Assuming no handler needed
@@ -325,7 +325,7 @@ int processManchester()
 
     for (start = 0; start < 10; start++)
     {
-        if (isrtimes_ptr[start] < 55)
+        if (isrtimes_ptr[start] < 150)
             break;
     }
     start += 3;
@@ -346,7 +346,7 @@ int processManchester()
     for (int i = start; i < isrCnt; i++)
     {
         // int pulsetime_thresh = pulsetime_fil + (pulsetime_fil/2);
-        int pulsetime_thresh = 55;
+        int pulsetime_thresh = 188;
         int travelTime = isrtimes_ptr[i];
         // NRF_LOG_INFO("%d", travelTime);
         if (((travelTime & 1) == 1)) // high
@@ -437,7 +437,7 @@ int processManchester()
             bitcount = 0;
             bytecount++;
         }
-        if (travelTime > 80)
+        if (travelTime > 310)
         {
             if (bitcount > 0)
             {
@@ -523,26 +523,36 @@ void readTagResp(int delay_time)
     isrCnt = 0;
     // nrf_gpio_pin_toggle(TEST_PIN);
 
-    gpio_init_interrupt();
-
-    switch(delay_time){
-        case 0:
-            for (volatile int i = 0; i < 220; i++)
-                for (volatile int k = 0; k < 220; k++)
-                    ;
-            break;
-        case 1:
-            for (volatile int i = 0; i < 300; i++)
-                for (volatile int k = 0; k < 400; k++)
-                    ;
-            break;
-        case 2:
-            for (volatile int i = 0; i < 300; i++)
-                for (volatile int k = 0; k < 300; k++)
-                    ;
-            break;
-        default:
-            break;
+    //gpio_init_interrupt();
+    bool prev_din_pin_state = nrf_gpio_pin_read(din_pin);
+    bool pin_22_state = prev_din_pin_state;
+    nrf_gpio_pin_write(22, pin_22_state);
+    int prev_time = 0;
+    for(volatile int j=0;j<9100;j++){
+        if(nrf_gpio_pin_read(din_pin) != prev_din_pin_state) {
+            uint32_t travelTime = nrf_drv_timer_capture(&TIMER_TEST, NRF_TIMER_CC_CHANNEL0);
+            //NRF_LOG_INFO("TRAVEL TIME: %d", travelTime);
+            nrf_drv_timer_clear(&TIMER_TEST);
+            
+            if (nrf_gpio_pin_read(din_pin))
+            {
+                travelTime &= ~1;
+            }
+            else
+            {
+                travelTime |= 1;
+            }
+            
+            if(isrCnt < 400) {
+                /*caculate the interval time between 2 capture and store into isrtimes_ptr*/
+                isrtimes_ptr[isrCnt] = travelTime;
+                //NRF_LOG_INFO("captured_time: %d", isrtimes_ptr[isrCnt]);
+                //prev_time = travelTime;
+                isrCnt++;
+            }
+            //nrf_gpio_pin_write(22, nrf_gpio_pin_read(din_pin));
+            prev_din_pin_state = nrf_gpio_pin_read(din_pin);
+        }
     }
     // for (volatile int i = 0; i < 300; i++)
     //     for (volatile int k = 0; k < 300; k++)
