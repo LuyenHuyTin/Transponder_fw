@@ -93,29 +93,15 @@ int main(void) {
     EsyPro::CommunicationObj *ble = new BleCommObj();
     EsyPro::CommunicationModule commPC(pc, EsyPro::PC_COMM_TYPE);
     EsyPro::CommunicationModule commBLE(ble, EsyPro::BLE_COMM_TYPE);
-    std::vector<EsyPro::CommunicationModule> commObjs{commPC};
+    std::vector<EsyPro::CommunicationModule> commObjs{commPC, commBLE};
 
     Global::InitPeripheral();
 
     NRF_LOG_INFO("[ESY-PRO-V2]: INFO: Start ESY-PRO-V2: v%d.%d.%d",
                     DEVICE_VERSION[0], DEVICE_VERSION[1], DEVICE_VERSION[2]);
 
-    //ReadAllthing();
-    Setup();
     while (1) {
         Global::Run(commObjs);
-        //nrf_delay_ms(1000);
     }
-    // Global::InitLogModule();
-
-    // NRF_LOG_INFO("[Transponder]: INFO: Start ESY-PRO-V2: v%d.%d.%d",
-    //              DEVICE_VERSION[0], DEVICE_VERSION[1], DEVICE_VERSION[2]);
-    // while (1)
-    // {
-    //     ReadAllthing();
-    //     //nrf_delay_ms(10000);
-    //     //WritePage();
-    //     nrf_delay_ms(1000);
-    // }
     return 0;
 }

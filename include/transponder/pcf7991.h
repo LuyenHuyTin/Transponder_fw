@@ -9,7 +9,7 @@
 
 // Public methods
 #define VALID_READ_RESPONSE_SIZE_TRANS  36
-#define VALID_WRITE_RESPONSE_SIZE_TRANS  10
+#define VALID_WRITE_RESPONSE_SIZE_TRANS  14
 
 namespace PCF7991
 {
@@ -75,7 +75,7 @@ namespace PCF7991
 
     class ReadCommand : public EsyPro::Command {
     public:
-        std::vector<std::string> req_read_set = {"05C0", "204D494B52", "0aD900", "0aC980",
+        std::vector<std::string> mesReqRead = {"05C0", "204D494B52", "0aD900", "0aC980",
                                                 "0aD140", "0aE0C0", "0aE880", "0aF040", "0aF800"};
         void Execute(EsyPro::CommPacket_t *commResPacket,
                      const EsyPro::CommPacket_t *commReqPacket,
@@ -84,7 +84,8 @@ namespace PCF7991
 
     class WriteCommand : public EsyPro::Command {
     public:
-        std::vector<std::string> req_write_set = {"05C0", "204D494B52", "0aA2C0"};
+        std::vector<std::string> mesReqWrite = {"05C0", "204D494B52"};
+        std::vector<std::string> mesEachPage = {"0a83C0", "0a8B80", "0a9340", "0a9B00", "0aA2C0", "0aAA80", "0aB240", "0aBA00"};
         void Execute(EsyPro::CommPacket_t *commResPacket,
                      const EsyPro::CommPacket_t *commReqPacket,
                      EsyPro::CommunicationType_t commType) override;
