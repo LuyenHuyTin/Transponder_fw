@@ -347,133 +347,133 @@ int processManchester()
     int start = 0;
     int pulsetime_fil = 0;
 
-    //  for (start = 0; start < 10; start++)
-    //  {
-    //      if (isrtimes_ptr[start] < 80)
-    //          break;
-    //  }
-    // start += 3;
-    // /* Aadapt filtered pulse time during first pulses */
-    // int pulsetime_accum = 0;
-    // for (uint8_t i = start + 1; i < start + 4; i++)
-    // {
-    //     pulsetime_accum += isrtimes_ptr[i];
-    // }
-    // pulsetime_fil = pulsetime_accum / 4;
+    for (start = 0; start < 10; start++)
+    {
+        if (isrtimes_ptr[start] < 150)
+            break;
+    }
+    start += 3;
+    /* Aadapt filtered pulse time during first pulses */
+    int pulsetime_accum = 0;
+    for (uint8_t i = start + 1; i < start + 4; i++)
+    {
+        pulsetime_accum += isrtimes_ptr[i];
+    }
+    pulsetime_fil = pulsetime_accum / 4;
 
-    // if (((isrtimes_ptr[start]) & 1) == 0)
-    // {
-    //     start--;
-    //     pulsetime_fil = fir_filter(pulsetime_fil, isrtimes_ptr[start]);
-    // }
-    NRF_LOG_INFO("start: %d and isrCnt: %d", start, isrCnt);
+    if (((isrtimes_ptr[start]) & 1) == 0)
+    {
+        start--;
+        pulsetime_fil = fir_filter(pulsetime_fil, isrtimes_ptr[start]);
+    }
+
     for (int i = start; i < isrCnt; i++)
     {
-        //int pulsetime_thresh = pulsetime_fil + (pulsetime_fil/2);
-        int pulsetime_thresh = 55;
+        // int pulsetime_thresh = pulsetime_fil + (pulsetime_fil/2);
+        int pulsetime_thresh = 188;
         int travelTime = isrtimes_ptr[i];
-        NRF_LOG_INFO("travelTime: %d", travelTime);
-        // if (((travelTime & 1) == 1)) // high
-        // {
-        //     if (travelTime > pulsetime_thresh)
-        //     {
-        //         // travelTime =11;
-        //         if (state)
-        //         {
-        //             state = 1;
-        //             if (lead < 4)
-        //             {
-        //                 lead++;
-        //                 // Serial.print("X");
-        //             }
-        //             else
-        //             {
-        //                 mybytes[bytecount] |= (1 << (7 - bitcount++));
-        //                 // Serial.print("1");
-        //             }
-        //         }
-        //         else
-        //         {
-        //             // NRF_LOG_INFO("X");
-        //             if (bytecount < 1)
-        //                 errorCnt++;
-        //         }
-        //     }
-        //     else
-        //     {
-        //         pulsetime_fil = fir_filter(pulsetime_fil, travelTime);
-        //         if (state)
-        //         {
-        //             state = 0;
-        //             if (lead < 4)
-        //             {
-        //                 lead++;
-        //             }
-        //             else
-        //             {
-        //                 mybytes[bytecount] |= (1 << (7 - bitcount++));
-        //                 // Serial.print("1");
-        //             }
-        //         }
-        //         else
-        //         {
-        //             state++;
-        //         }
-        //     }
-        // }
-        // else
-        // {
-        //     if (travelTime > pulsetime_thresh)
-        //     {
-        //         if (state)
-        //         {
-        //             state = 1;
-        //             bitcount++;
-        //             // Serial.print("0");
-        //         }
-        //         else
-        //         {
-        //             // NRF_LOG_INFO("X");
-        //             if (bytecount < 1)
-        //             {
-        //                 errorCnt++;
-        //             }
-        //         }
-        //     }
-        //     else
-        //     {
-        //         pulsetime_fil = fir_filter(pulsetime_fil, travelTime);
-        //         if (state)
-        //         {
-        //             state = 0;
-        //             bitcount++;
-        //             // Serial.print("0");
-        //         }
-        //         else
-        //         {
-        //             state++;
-        //         }
-        //     }
-        // }
+        // NRF_LOG_INFO("%d", travelTime);
+        if (((travelTime & 1) == 1)) // high
+        {
+            if (travelTime > pulsetime_thresh)
+            {
+                // travelTime =11;
+                if (state)
+                {
+                    state = 1;
+                    if (lead < 4)
+                    {
+                        lead++;
+                        // Serial.print("X");
+                    }
+                    else
+                    {
+                        mybytes[bytecount] |= (1 << (7 - bitcount++));
+                        // Serial.print("1");
+                    }
+                }
+                else
+                {
+                    // NRF_LOG_INFO("X");
+                    if (bytecount < 1)
+                        errorCnt++;
+                }
+            }
+            else
+            {
+                pulsetime_fil = fir_filter(pulsetime_fil, travelTime);
+                if (state)
+                {
+                    state = 0;
+                    if (lead < 4)
+                    {
+                        lead++;
+                    }
+                    else
+                    {
+                        mybytes[bytecount] |= (1 << (7 - bitcount++));
+                        // Serial.print("1");
+                    }
+                }
+                else
+                {
+                    state++;
+                }
+            }
+        }
+        else
+        {
+            if (travelTime > pulsetime_thresh)
+            {
+                if (state)
+                {
+                    state = 1;
+                    bitcount++;
+                    // Serial.print("0");
+                }
+                else
+                {
+                    // NRF_LOG_INFO("X");
+                    if (bytecount < 1)
+                    {
+                        errorCnt++;
+                    }
+                }
+            }
+            else
+            {
+                pulsetime_fil = fir_filter(pulsetime_fil, travelTime);
+                if (state)
+                {
+                    state = 0;
+                    bitcount++;
+                    // Serial.print("0");
+                }
+                else
+                {
+                    state++;
+                }
+            }
+        }
 
-        // if (bitcount > 7)
-        // {
-        //     bitcount = 0;
-        //     bytecount++;
-        // }
-        // if (travelTime > 300)
-        // {
-        //     if (bitcount > 0)
-        //     {
-        //         bytecount++;
-        //     }
-        //     break;
-        // }
+        if (bitcount > 7)
+        {
+            bitcount = 0;
+            bytecount++;
+        }
+        if (travelTime > 310)
+        {
+            if (bitcount > 0)
+            {
+                bytecount++;
+            }
+            break;
+        }
     }
     // NRF_LOG_INFO("bytecount: %d", bytecount);
     NRF_LOG_INFO("bytecount: %d, bitcount: %d, errorCnt: %d, state: %d", bytecount, bitcount, errorCnt, state);
-    // if ((bytecount == 4) && (bitcount == 0) && (errorCnt == 0))
-    // {
+    if ((bytecount == 4) && (bitcount == 0) && (errorCnt == 0))
+    {
         // NRF_LOG_INFO("bytecount: %d, bitcount: %d, errorCnt: %d, state: %d", bytecount, bitcount, errorCnt, state);
         //  if(bytecount < 4) {
         //      doAllthing();
@@ -494,19 +494,25 @@ int processManchester()
             }
         }
         NRF_LOG_INFO("\n");
-    //     return bytecount;
-    // }
-    // else
-    // {
-    //     if ((bytecount == 2) && (errorCnt == 0))
-        // {
-    //         for (int s = 0; s < bytecount && s < 20; s++)
-    //         {
-    //             byte_to_send.push_back(mybytes[s]);
-    //             NRF_LOG_INFO("0x%x", mybytes[s]);
-    //         }
-    //     }
-    // }
+        return bytecount;
+    }
+    else
+    {
+        if((bytecount == 2) && (errorCnt == 0) && (bitcount == 2)) {
+            for (int s = 0; s < bytecount && s < 20; s++)
+            {
+                byte_to_send.push_back(mybytes[s]);
+                NRF_LOG_INFO("0x%x", mybytes[s]);
+            }
+        }
+        else {
+            for (int s = 0; s < 4 && s < 20; s++)
+            {
+                byte_to_send.push_back(0);
+                //NRF_LOG_INFO("0x%x", mybytes[s]);
+            }
+        }
+    }
     // NRF_LOG_INFO("bytecount: %d", res);
     return 0;
 }
@@ -540,41 +546,6 @@ void readTagResp(void)
 {
     writePCF7991Reg(0xe0, 3);
     isrCnt = 0;
-    int32_t travelTime;
-    //NVIC_DisableIRQ(TIMER0_IRQn);
-
-        // for (int i = 0; i < 10000; i++)
-        // {
-        //     /*How I can check state of din_pin change and capture time from Timer0CC*/
-        //     if(nrf_gpio_pin_read(din_pin) != prev_din_pin_state) {
-        //         NRF_TIMER0->TASKS_CAPTURE[0] = 1;
-        //         travelTime = NRF_TIMER0->CC[0];
-        //         if (nrf_gpio_pin_read(din_pin))
-        //         {
-        //             travelTime &= ~1;
-        //         }
-        //         else
-        //         {
-        //             travelTime |= 1;
-        //         }
-                
-        //         // isrtimes_ptr[isrCnt] = travelTime;
-        //         // /NRF_LOG_INFO("captured_time: %d", travelTime);
-        //         if(isrCnt < 400) {
-        //             if(isrCnt == 0) {
-        //                 isrtimes_ptr[isrCnt] = travelTime;
-        //             } else {
-        //                 isrtimes_ptr[isrCnt] = travelTime - isrtimes_ptr[isrCnt-1];
-        //             }
-        //             // NRF_LOG_INFO("captured_time: %d", isrtimes_ptr[isrCnt]);
-        //         }
-                
-        //         isrCnt++;
-                
-        //         prev_din_pin_state = nrf_gpio_pin_read(din_pin);
-        //     }
-        // }
-        // nrf_delay_us(1);
         //nrf_gpio_cfg_output(22);
         bool prev_din_pin_state = nrf_gpio_pin_read(din_pin);
         bool pin_22_state = prev_din_pin_state;
@@ -584,7 +555,8 @@ void readTagResp(void)
             for(volatile int j=0;j<9100;j++){
                 if(nrf_gpio_pin_read(din_pin) != prev_din_pin_state) {
                     NRF_TIMER0->TASKS_CAPTURE[3] = 1;
-                    travelTime = NRF_TIMER0->CC[3];
+                    uint32_t current_time = NRF_TIMER0->CC[3];
+                    int32_t travelTime = current_time - prev_time;
                     //NRF_LOG_INFO("travelTime: %d", travelTime);
                     if (nrf_gpio_pin_read(din_pin))
                     {
@@ -594,21 +566,19 @@ void readTagResp(void)
                     {
                         travelTime |= 1;
                     }
-                    // isrtimes_ptr[isrCnt] = travelTime;
-                    // /NRF_LOG_INFO("captured_time: %d", travelTime);
                     if(isrCnt < 400) {
                         /*caculate the interval time between 2 capture and store into isrtimes_ptr*/
-                        isrtimes_ptr[isrCnt] = travelTime - prev_time;
+                        isrtimes_ptr[isrCnt] = travelTime;
                         //NRF_LOG_INFO("captured_time: %d", isrtimes_ptr[isrCnt]);
-                        prev_time = travelTime;
+                        prev_time = current_time;
                         isrCnt++;
                     }
-                    pin_22_state = nrf_gpio_pin_read(din_pin);
-                    // Toggle the state
-                    pin_22_state = !pin_22_state;
+                    // pin_22_state = nrf_gpio_pin_read(din_pin);
+                    // // Toggle the state
+                    // pin_22_state = !pin_22_state;
                     
-                    // Write new state to pin 22
-                    nrf_gpio_pin_write(22, pin_22_state);
+                    // // Write new state to pin 22
+                    // nrf_gpio_pin_write(22, pin_22_state);
                     prev_din_pin_state = nrf_gpio_pin_read(din_pin);
                 }
             }
@@ -618,11 +588,11 @@ void readTagResp(void)
 
     //NVIC_EnableIRQ(TIMER0_IRQn);
 
-    // if (isrCnt < 400 && isrCnt > 3)
-    // {
-    //     isrtimes_ptr[isrCnt - 1] = isrtimes_ptr[isrCnt - 2] + 201;
-    //     isrCnt++;
-    // }
+    if (isrCnt < 400 && isrCnt > 3)
+    {
+        isrtimes_ptr[isrCnt - 1] = isrtimes_ptr[isrCnt - 2] + 201;
+        isrCnt++;
+    }
     working_enable = false;
 }
 
