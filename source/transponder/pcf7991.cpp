@@ -22,10 +22,12 @@ uint8_t decodemode = 0;
 uint32_t delay_1 = 20;
 uint32_t delay_0 = 14;
 uint32_t waiting_time = 9100;
-std::vector<uint32_t> byte_to_send;
+uint32_t byte_to_send[VALID_READ_RESPONSE_SIZE_TRANS] = {0};
+uint8_t byte_to_send_count = 0;
+uint8_t sampcont=0x17;
 static volatile bool working_enable = false;
 static volatile bool keep_running = true;
-static volatile bool status = false;
+static bool status = false;
 
 /*ABIC Settings */
 //////////////////////////
@@ -85,13 +87,11 @@ static void mcPcfWaitForReady()
 Command *PCF7991::GetSpecificCmd(EsyPro::CommunicationCmd_t commCmdType)
 {
     Command *cmd = NULL;
-
-    NRF_LOG_INFO("-----reqPacket.cmd: %x", commCmdType & 0x0F);
     switch (commCmdType & 0x0F)
     {
     case CMD_BASIC_TRANS_SETUP_REQ:
         cmd = &pcf7991SetupCmd;
-        NRF_LOG_INFO("[%s]: INFO: Setup Request", LOG_DGB_NAME);
+        NRF_LOG_INFO("[%s]: INFO: Ping (Setup) Request", LOG_DGB_NAME);
         break;
 
     case CMD_BASIC_TRANS_READ_DATA_REQ:
@@ -172,11 +172,11 @@ uint8_t readPCF7991Reg(uint8_t addr)
 void adapt(uint8_t offset)
 {
     uint8_t phase = readPCF7991Reg(0x08); // Read Phase
-    NRF_LOG_INFO("Measured phase: %x", phase);
+    //NRF_LOG_INFO("Measured phase: %x", phase);
     uint8_t samplingT = (0x3f & (2 * phase + offset));
-    NRF_LOG_INFO("adapt samplingT: %x", samplingT);
+    //NRF_LOG_INFO("adapt samplingT: %x", samplingT);
     uint8_t readval = readPCF7991Reg((1 << 7) | samplingT); // Set Sampling Time + Cmd
-    NRF_LOG_INFO("adapt readval: %x", readval);
+    //NRF_LOG_INFO("adapt readval: %x", readval);
 }
 
 uint8_t initTransponder()
@@ -206,6 +206,18 @@ uint8_t initTransponder()
     AbicConf_Page1.txdis = 0;
     writePCF7991Reg(AbicConf_Page1.byteval, 8); // rf on
     uint8_t readval = 0;
+    for(int i = 2;i<9;i++)
+    {
+        readval = readPCF7991Reg(i);
+        //NRF_LOG_INFO("i:%d, val:%d", i, readval);
+    }
+    //NRF_LOG_INFO("set sampling time");
+    int samplingT = (1<<7)|(0x3f&sampcont);
+    readval = readPCF7991Reg(samplingT);
+    //NRF_LOG_INFO("samplingT:%d, val:%d", samplingT, readval);
+
+    //NRF_LOG_INFO("done registers\n");
+
     /*Config for oscillator 4Mhz*/
     writePCF7991Reg(0x70, 8);
 
@@ -428,7 +440,7 @@ void processManchester(void)
     {
         char hash[20];
         std::string result = "";
-        NRF_LOG_INFO("RESP:");
+        //NRF_LOG_INFO("RESP:");
         if (errorCnt || bytecount == 0)
         {
             NRF_LOG_INFO("NORESP\n");
@@ -437,7 +449,8 @@ void processManchester(void)
         {
             for (uint32_t s = 0; s < bytecount && s < 20; s++)
             {
-                byte_to_send.push_back(mybytes[s]);
+                byte_to_send[byte_to_send_count] = mybytes[s];
+                byte_to_send_count++;
                 NRF_LOG_INFO("0x%x", mybytes[s]);
             }
         }
@@ -449,16 +462,18 @@ void processManchester(void)
         {
             for (uint32_t s = 0; s < bytecount && s < 20; s++)
             {
-                byte_to_send.push_back(mybytes[s]);
-                NRF_LOG_INFO("0x%x", mybytes[s]);
+                byte_to_send[byte_to_send_count] = mybytes[s];
+                byte_to_send_count++;
+                //NRF_LOG_INFO("0x%x", mybytes[s]);
             }
         }
         else
         {
             for (uint32_t s = 0; s < 4 && s < 20; s++)
             {
-                byte_to_send.push_back(0);
-                NRF_LOG_INFO("0x%x", mybytes[s]);
+                byte_to_send[byte_to_send_count] = 0;
+                byte_to_send_count++;
+                //NRF_LOG_INFO("0x%x", mybytes[s]);
             }
         }
     }
@@ -474,6 +489,7 @@ void readTagResp(void)
     writePCF7991Reg(0xe0, 3);
     isrCnt = 0;
     bool prev_din_pin_state = nrf_gpio_pin_read(din_pin);
+    nrf_gpio_pin_write(22, prev_din_pin_state);
     uint32_t prev_time = 0;
     for (volatile uint32_t j = 0; j < waiting_time; j++)
     {
@@ -498,6 +514,7 @@ void readTagResp(void)
                 prev_time = current_time;
                 isrCnt++;
             }
+            nrf_gpio_pin_write(22, nrf_gpio_pin_read(din_pin));
             prev_din_pin_state = nrf_gpio_pin_read(din_pin);
         }
     }
@@ -531,34 +548,34 @@ void statusTimeSlot()
     {
         NRF_SDH_SOC_OBSERVER(m_time_slot_soc_observer, 0, time_slot_soc_evt_handler, NULL);
         timeslot_sd_init_pcf7991();
-        status == true;
+        status = true;
     }
 }
 
-std::string hexToString(const uint8_t *data, size_t length)
+void hexToString(const uint8_t *data, size_t length, char *output)
 {
-    std::string result;
     for (size_t i = 0; i < length; i++)
     {
-        result += static_cast<char>(data[i]);
+        output[i] = static_cast<char>(data[i]);
     }
-    return result;
+    output[length] = '\0'; // Ensure null-termination
 }
 
-uint8_t serialToByte(std::string &value)
+uint8_t serialToByte(const char *value, uint32_t &index)
 {
-    if (value.length() < 2)
-    {
-        NRF_LOG_INFO("Input string must have at least 2 characters.");
-        return 0; // Handle the error as appropriate
-    }
-
     uint8_t retval = 0;
 
-    for (uint32_t i = 0; i < 2; i++)
+    // Ensure we have at least two characters to process
+    if (value[index] == '\0' || value[index + 1] == '\0')
+    {
+        NRF_LOG_INFO("Input string must have at least 2 characters.");
+        return 0;
+    }
+
+    for (uint8_t i = 0; i < 2; i++)
     {
         retval <<= 4; // Shift left by 4 bits (one hex digit)
-        char raw = value[i];
+        char raw = value[index++];
         if (raw >= '0' && raw <= '9')
             retval |= raw - '0'; // Convert character to integer
         else if (raw >= 'A' && raw <= 'F')
@@ -567,12 +584,10 @@ uint8_t serialToByte(std::string &value)
             retval |= raw - 'a' + 10; // Convert hex character to integer
         else
         {
-            NRF_LOG_INFO("Invalid character in input string: ");
+            NRF_LOG_INFO("Invalid character in input string.");
             return 0;
         }
     }
-
-    (void)value.erase(0, 2);
     return retval;
 }
 
@@ -607,34 +622,38 @@ void ReadCommand::Execute(CommPacket_t *commResPacket,
                           const CommPacket_t *commReqPacket,
                           CommunicationType_t commType)
 {
-    byte_to_send.clear();
+    byte_to_send[VALID_READ_RESPONSE_SIZE_TRANS] = {0};
+    byte_to_send_count = 0;
+    //uint32_t delay_time[] = {8700, }
     statusTimeSlot();
     working_enable = false;
-    std::vector<std::string> test = mesReqRead;
-    for (uint32_t k = 0; k < test.size(); k++)
+    for (uint32_t k = 0; k < MAX_COMMANDS; k++)
     {
-        uint8_t cmdlength = serialToByte(test[k]);
+        const char *currentCmd = mesReqRead[k];
+        uint32_t index = 0; // Tracks the current position in the command string
+
+        uint8_t cmdlength = serialToByte(currentCmd, index);
         uint8_t authcmd[300] = {0};
+
         if (cmdlength > 1 && cmdlength < 200)
         {
             for (uint32_t i = 0; i < (cmdlength + 7) / 8; i++)
             {
-                authcmd[i] = serialToByte(test[k]);
+                authcmd[i] = serialToByte(currentCmd, index);
             }
         }
         communicateTag(authcmd, cmdlength);
     }
+    AbicConf_Page1.txdis = 1;
+    writePCF7991Reg(AbicConf_Page1.byteval, 8);//rf off
 
-    if (byte_to_send.size() == VALID_READ_RESPONSE_SIZE_TRANS)
+    for (uint32_t i = 0; i < VALID_READ_RESPONSE_SIZE_TRANS; i++)
     {
-        for (uint32_t i = 0; i < byte_to_send.size(); i++)
-        {
-            commResPacket->buffer[i] = byte_to_send[i];
-        }
-        commResPacket->cmd = CMD_BASIC_TRANS_READ_DATA_RES;
-        commResPacket->bleUUID = CUSTOM_VALUE_READ_CHAR_UUID;
-        commResPacket->bufLen = VALID_READ_RESPONSE_SIZE_TRANS;
+        commResPacket->buffer[i] = byte_to_send[i];
     }
+    commResPacket->cmd = CMD_BASIC_TRANS_READ_DATA_RES;
+    commResPacket->bleUUID = CUSTOM_VALUE_READ_CHAR_UUID;
+    commResPacket->bufLen = VALID_READ_RESPONSE_SIZE_TRANS;
     this->SetCommandRepeatState(false);
 }
 
@@ -642,47 +661,71 @@ void WriteCommand::Execute(CommPacket_t *commResPacket,
                            const CommPacket_t *commReqPacket,
                            CommunicationType_t commType)
 {
-    byte_to_send.clear();
+    byte_to_send[VALID_READ_RESPONSE_SIZE_TRANS] = {0};
+    byte_to_send_count = 0;
     statusTimeSlot();
     working_enable = false;
-    uint8_t receiver[commReqPacket->bufLen - 1]; // Create an array to hold 4 bytes
 
+    uint8_t receiver[commReqPacket->bufLen - 1]; // Create an array to hold 4 bytes
     uint8_t positionPage;
     memcpy(receiver, commReqPacket->buffer, commReqPacket->bufLen - 1);
     memcpy(&positionPage, &commReqPacket->buffer[commReqPacket->bufLen - 1], 1);
     positionPage = positionPage - '0';
-    std::string data_to_write = hexToString(receiver, sizeof(receiver));
 
-    std::vector<std::string> test = mesReqWrite;
-    test.push_back(mesEachPage[positionPage]);
-    test.push_back(data_to_write);
-    for (uint32_t k = 0; k < test.size(); k++)
+    // Convert the receiver array to a hex string
+    char data_to_write[MAX_COMMAND_LENGTH] = {0};
+    hexToString(receiver, sizeof(receiver), data_to_write);
+
+    // Create a static array to hold the commands for this operation
+    const char *commands[4]; // Max commands: 2 from mesReqWrite, 1 from mesEachPage, 1 data_to_write
+    uint8_t commandCount = 0;
+
+    // Add commands from mesReqWrite
+    for (uint8_t i = 0; i < MAX_WRITE_COMMANDS; i++)
     {
-        uint8_t cmdlength = serialToByte(test[k]);
+        commands[commandCount++] = mesReqWrite[i];
+    }
+
+    // Add the selected page command
+    if (positionPage < MAX_PAGE_COMMANDS)
+    {
+        commands[commandCount++] = mesEachPage[positionPage];
+    }
+
+    // Add the data to write
+    commands[commandCount++] = data_to_write;
+
+    // Process each command in the static array
+    for (uint32_t k = 0; k < commandCount; k++)
+    {
+        const char *currentCmd = commands[k];
+        uint32_t index = 0; // Index for parsing the string
+
+        uint8_t cmdlength = serialToByte(currentCmd, index);
         uint8_t authcmd[300] = {0};
+
         if (cmdlength > 1 && cmdlength < 200)
         {
             for (uint32_t i = 0; i < (cmdlength + 7) / 8; i++)
             {
-                authcmd[i] = serialToByte(test[k]);
+                authcmd[i] = serialToByte(currentCmd, index);
             }
         }
 
         communicateTag(authcmd, cmdlength);
-        // nrf_delay_ms(20);
     }
-    NRF_LOG_INFO("byte_to_send.size(): %d", byte_to_send.size());
-    if (byte_to_send.size() == VALID_WRITE_RESPONSE_SIZE_TRANS)
+    AbicConf_Page1.txdis = 1;
+    writePCF7991Reg(AbicConf_Page1.byteval, 8);//rf off
+
+
+    for (uint32_t i = 0; i < 2; i++)
     {
-        for (uint32_t i = 0; i < 2; i++)
-        {
-            commResPacket->buffer[i] = byte_to_send[i + 8];
-        }
-        commResPacket->cmd = CMD_BASIC_TRANS_WRITE_DATA_RES;
-        commResPacket->bleUUID = CUSTOM_VALUE_READ_CHAR_UUID;
-        commResPacket->bufLen = 2;
+        commResPacket->buffer[i] = byte_to_send[i + 8];
     }
-    byte_to_send.clear();
+    commResPacket->cmd = CMD_BASIC_TRANS_WRITE_DATA_RES;
+    commResPacket->bleUUID = CUSTOM_VALUE_READ_CHAR_UUID;
+    commResPacket->bufLen = 2;
+
     this->SetCommandRepeatState(false);
 }
 
@@ -847,10 +890,10 @@ uint32_t timeslot_sd_init_pcf7991(void)
     if (err_code != NRF_SUCCESS)
     {
         (void)sd_radio_session_close();
-        NRF_LOG_INFO("sd_radio_session_close FAIL")
+        NRF_LOG_INFO("sd_radio_session_close FAIL");
         return err_code;
     }
-    NRF_LOG_INFO("timeslot_sd_init_pcf7991 done")
+    NRF_LOG_INFO("timeslot_sd_init_pcf7991 done");
 
     // some delay
     nrf_delay_us(m_slot_length);

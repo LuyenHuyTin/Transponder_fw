@@ -8,8 +8,13 @@
 #include <iostream>
 
 // Public methods
-#define VALID_READ_RESPONSE_SIZE_TRANS  36
-#define VALID_WRITE_RESPONSE_SIZE_TRANS  14
+#define VALID_READ_RESPONSE_SIZE_TRANS      36
+#define VALID_WRITE_RESPONSE_SIZE_TRANS     14
+#define MAX_COMMANDS                        9
+#define MAX_COMMAND_LENGTH                  11
+#define MAX_WRITE_COMMANDS                  2
+#define MAX_PAGE_COMMANDS                   8
+#define MAX_COMMAND_LENGTH                  12 // Max length of command + null terminator
 
 namespace PCF7991
 {
@@ -75,8 +80,9 @@ namespace PCF7991
 
     class ReadCommand : public EsyPro::Command {
     public:
-        std::vector<std::string> mesReqRead = {"05C0", "204D494B52", "0aD900", "0aC980",
-                                                "0aD140", "0aE0C0", "0aE880", "0aF040", "0aF800"};
+        const char mesReqRead[MAX_COMMANDS][MAX_COMMAND_LENGTH] = {
+            "05C0", "204D494B52", "0aD900", "0aC980",
+            "0aD140", "0aE0C0", "0aE880", "0aF040", "0aF800"};
         void Execute(EsyPro::CommPacket_t *commResPacket,
                      const EsyPro::CommPacket_t *commReqPacket,
                      EsyPro::CommunicationType_t commType) override;
@@ -84,15 +90,19 @@ namespace PCF7991
 
     class WriteCommand : public EsyPro::Command {
     public:
-        std::vector<std::string> mesReqWrite = {"05C0", "204D494B52"};
-        std::vector<std::string> mesEachPage = {"0a83C0", "0a8B80", "0a9340", "0a9B00", "0aA2C0", "0aAA80", "0aB240", "0aBA00"};
+        const char mesReqWrite[MAX_WRITE_COMMANDS][MAX_COMMAND_LENGTH] = {
+            "05C0", "204D494B52"};
+
+        const char mesEachPage[MAX_PAGE_COMMANDS][MAX_COMMAND_LENGTH] = {
+            "0a83C0", "0a8B80", "0a9340", "0a9B00",
+            "0aA2C0", "0aAA80", "0aB240", "0aBA00"};
         void Execute(EsyPro::CommPacket_t *commResPacket,
                      const EsyPro::CommPacket_t *commReqPacket,
                      EsyPro::CommunicationType_t commType) override;
     };
-    void ReadAllthing();
-    void WritePage();
-    void Setup();
+    // void ReadAllthing();
+    // void WritePage();
+    // void Setup();
 }
 
 #endif /* __PCF7991_H */
